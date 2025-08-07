@@ -1,0 +1,68 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+
+# 设置字体
+plt.rcParams["font.family"] = "Arial"
+
+# 路径设置
+input_file = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites.csv"
+output_dir = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average"
+output_area_fig = os.path.join(output_dir, "area_5class_piechart.tif")
+
+# 读取数据
+df = pd.read_csv(input_file)
+
+# 分组定义
+bins = [1, 10, 100, 1000, 100000, np.inf]
+labels = ['1–10', '10–100', '100–1000', '1000–100000', '>100000']
+df['area_class'] = pd.cut(df['area_km2'], bins=bins, labels=labels, right=False)
+
+# 统计每组面积总和和 DOC 总和
+grouped = df.groupby('area_class', observed=True).agg(
+    total_area_km2=('area_km2', 'sum'),
+    total_DOC=('Average_Total_DOC', 'sum')
+)
+
+# 计算百分比
+grouped['area_percent'] = grouped['total_area_km2'] / grouped['total_area_km2'].sum() * 100
+
+# 调色板
+colors = ["#ffffcc", "#a1dab4", "#41b6c4", "#2c7fb8", "#253494"]
+
+# === 饼状图：面积百分比 ===
+fig1, ax1 = plt.subplots(figsize=(1.18, 1.18))  # 4cm x 4cm ≈ 1.57in x 1.57in
+wedges, texts, autotexts = ax1.pie(
+    grouped['total_area_km2'],
+    labels=None,
+    autopct=lambda p: f'{p:.1f}%',
+    colors=colors,
+    startangle=140,
+    textprops={"fontsize": 6},
+    labeldistance=0.6
+)
+
+# 设置标题
+ax1.set_title("Total Area Distribution", fontsize=6, pad=-160)
+
+# 修改第一组的百分比标签位置到外部
+angle = (wedges[0].theta2 + wedges[0].theta1) / 2
+x = 1.1 * np.cos(np.radians(angle))
+y = 1.1 * np.sin(np.radians(angle))
+autotexts[0].set_position((x, y))
+autotexts[0].set_ha('center')
+autotexts[0].set_va('center')
+
+# 其他组的位置保持不变，字体大小也保持
+for i in range(1, len(autotexts)):
+    autotexts[i].set_fontsize(6)
+
+# 不显示 label，仅显示百分比
+for text in texts:
+    text.set_text('')
+
+# 保存图像
+plt.savefig(output_area_fig, dpi=600, bbox_inches='tight', format='tiff', transparent=True)
+plt.close()
+

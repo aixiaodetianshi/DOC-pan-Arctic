@@ -1,0 +1,55 @@
+# 将CDOM转换为DOC
+# 同时添加不确定性及其不确定性传递
+
+import pandas as pd
+import numpy as np
+import xlsxwriter
+import os
+import math
+import gc  # 引入垃圾回收模块
+
+# 设置存放CSV文件的文件夹路径
+csv_folder = r'D:\UZH\2024\20240122 Nutrient and Organic Carbon references\2_river_mouth_CDOM\CDOM\HLSS30'
+# 设置存放转换后csv文件的文件夹路径
+DOC_folder = r'D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\HLSS30'
+
+# 如果存储XLSX文件的文件夹不存在，则创建
+if not os.path.exists(DOC_folder):
+    os.makedirs(DOC_folder)
+
+CDOM_DOC_uncertainty = 2.0919
+# 指定要排序的列顺序
+desired_columns = ['date', 'COMID', 'CDOM', 'CDOM_uncertainty', 'DOC', 'DOC_uncertainty']
+date_format = '%Y-%m-%d'
+
+# 遍历CSV文件夹中的所有CSV文件
+for filename in os.listdir(csv_folder):
+    if filename.endswith(".csv"):  # 只处理CSV文件
+        csv_file_path = os.path.join(csv_folder, filename)
+
+        print(f'文件 {csv_file_path} 正在计算')
+
+        # 读取CSV文件
+        df = pd.read_csv(csv_file_path)
+
+        # 如果 'system:index' 和 '.geo' 列存在，删除它们
+        df = df.drop(columns=['system:index', '.geo'], errors='ignore')
+
+        # 转换 'date' 列为日期格式（如果存在）
+        if 'date' in df.columns:
+            df['date'] = pd.to_datetime(df['date'], errors='coerce').dt.strftime(date_format)
+
+        # 仅计算非空 CDOM 的 DOC 值并添加为新列
+        if 'CDOM' in df.columns:
+            df = df.dropna(subset=['CDOM'])
+            df['DOC'] = 0.60082 * df['CDOM'] + 1.77043
+            df['DOC_uncertainty'] = np.sqrt(df['CDOM_uncertainty'] ** 2 + CDOM_DOC_uncertainty ** 2)
+
+            # 保存 CSV
+            DOC_output_file = os.path.join(DOC_folder, filename.replace('.csv', '_DOC.csv'))
+            df.to_csv(DOC_output_file, index=False)
+
+        gc.collect()  # 释放内存
+        print(f'已保存: {csv_file_path}')
+
+    print("批量处理完成！")
