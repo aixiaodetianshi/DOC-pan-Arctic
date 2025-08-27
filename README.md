@@ -42,7 +42,7 @@ Contact
 For questions or collaborations, please contact:
 Weixiao Han
 Postdoctoral Researcher, University of Zurich
-📧 hanwei.xiao@uzh.ch
+weixiao.han@uzh.ch
 
 1. Clone this repository:
    ```bash
