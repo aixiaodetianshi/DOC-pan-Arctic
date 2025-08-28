@@ -82,19 +82,19 @@ z = np.polyfit(y_filtered, y_pred_filtered, 1)
 p = np.poly1d(z)
 plt.plot(y_filtered, p(y_filtered), color='forestgreen', linestyle='-', linewidth=2, label='Regression Line')
 
-# 获取当前轴对象并获取y轴的最小值和最大值
+# 获取当前轴对象并获取y轴的最小值和最大值  # English: Get the current axis object and get
 ax = plt.gca()
 y_min, y_max = ax.get_ylim()
 
 # Display river and satellite information at the top left corner of the plot, inside the plot frame
-plt.text(min(y_filtered) + 0.02 * (max(y_filtered) - min(y_filtered)),  # 水平位置稍微离边缘有点距离
-         y_max - 0.05 * (y_max - y_min),  # 垂直位置稍微离图像顶部有点距离
+plt.text(min(y_filtered) + 0.02 * (max(y_filtered) - min(y_filtered)),  # 水平位置稍微离边缘有点距离  # English: Horizontal position is slightly away from the edge
+         y_max - 0.05 * (y_max - y_min),  # 垂直位置稍微离图像顶部有点距离  # English: The vertical position is slightly away from the top of the image
          f'{river} - {satellite}', fontsize=12,
          bbox=dict(facecolor='white', edgecolor='none', alpha=0.7))
 
 # Display RMSE, R², and the number of filtered records on the plot, below river-satellite info with some padding
-plt.text(min(y_filtered) + 0.02 * (max(y_filtered) - min(y_filtered)),  # 同样水平对齐
-         y_max - 0.3 * (y_max - y_min),  # 统计信息位置比river-satellite低一些
+plt.text(min(y_filtered) + 0.02 * (max(y_filtered) - min(y_filtered)),  # 同样水平对齐  # English: Same horizontal alignment
+         y_max - 0.3 * (y_max - y_min),  # 统计信息位置比river-satellite低一些  # English: Statistical information position ratio
          f'RMSE: {rmse:.2f}\nMAE: {mae:.2f}\nBias: {bias:.2f}\nR²: {r2:.2f}',
          fontsize=10, bbox=dict(facecolor='white', edgecolor='none', alpha=0.7))
 

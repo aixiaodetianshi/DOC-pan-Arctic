@@ -13,13 +13,13 @@ data = pd.read_excel(input_path)
 # Extract file name for saving the figure and coefficients later
 file_name = os.path.basename(input_path).replace('.xlsx', '')
 
-# 计算CDOM与rs_CDOM的偏差绝对值
+# 计算CDOM与rs_CDOM的偏差绝对值  # English: calculate
 data['abs_diff'] = (data['CDOM'] - data['rs_CDOM']).abs()
 
-# 按insitu_date分组，并找到每组中偏差最小的一行
+# 按insitu_date分组，并找到每组中偏差最小的一行  # English: according to
 selected_rows = data.loc[data.groupby('insitu_date')['abs_diff'].idxmin()]
 
-# 去掉偏差绝对值列
+# 去掉偏差绝对值列  # English: Remove the deviation absolute value column
 selected_rows.drop(columns=['abs_diff'], inplace=True)
 
 # Save the updated DataFrame to a new Excel file
