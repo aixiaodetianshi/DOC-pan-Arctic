@@ -46,4 +46,4 @@ weixiao.han@uzh.ch
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/yourusername/arctic-doc-flux.git
+   git clone https://github.com/aixiaodetianshi/DOC-pan-Arctic.git
