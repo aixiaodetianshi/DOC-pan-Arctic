@@ -1,0 +1,2889 @@
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost.py
+new file mode 100644
+--- /dev/null	(date 1755617703968)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost.py	(date 1755617703968)
+@@ -0,0 +1,94 @@
++import pandas as pd
++import numpy as np
++from sklearn.model_selection import train_test_split
++from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score
++import pickle
++from catboost import CatBoostRegressor
++
++# ================= Step 1: 读取数据 =================
++df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC_analysis.csv"
++)
++target_col = 'Average_Total_DOC'
++df = df.dropna(subset=[target_col])
++
++# 删除不需要的列
++drop_cols = [
++    'Annual_Increase_Rate', 'Annual_Increase_Rate_1', 'Average_Total_DOC_Area_Unit',
++    'Average_Total_DOC_1', 'Annual_Increase_Rate_DOC_Area_Unit'
++]
++df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
++
++# 特征
++X = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
++
++# ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========
++"""
++selected_features = ["ocd_4_mean", "center_lat", "soc_6_mean", "bdod_1_mea", "soc_5_mean", "ocd_6_mean", "cslope_mea", "soc_3_mean", "ocd_5_mean", "soc_4_mean",
++                     "ocd_3_mean", "soc_2_mean", "total_prec", "cfvo_6_mea", "t_2m_mean", "bdod_3_mea", "LS_mean", "s_epot", "terrain_12", "slope"]  # ← 请把20个变量完整填在此处
++"""
++selected_features = ["pf_disc", "pf_spor", "terrain_5", "gravelius", "terrain_14", "LS_mean", "soilt_12", "lc_20", "s_etot", "t_2m_mean",
++                     "s_NDVI_mea", "s_TCW_mean", "frac_burn", "bdod_5_mea", "bdod_6_mea", "ocd_1_mean", "bdod_1_mea", "ocs_mean", "s_soiltem4", "center_lat"]  # ← 请把20个变量完整填在此处
++
++X = X[[col for col in selected_features if col in X.columns]]
++
++feature_names = X.columns
++y = df[target_col]
++
++# ================= Step 2: 数据预处理 =================
++X_train, X_test, y_train, y_test = train_test_split(
++    X, y, test_size=0.2, random_state=42
++)
++
++X_train_imputed = X_train
++X_test_imputed = X_test
++
++# ================= Step 3: 训练 CatBoost =================
++cat_model = CatBoostRegressor(
++    iterations=10000,           # 总迭代次数（树数）
++    learning_rate=0.05,         # ← 调高学习率，收敛更快
++    depth=10,                   # 树的深度，控制模型复杂度
++    l2_leaf_reg=20,             # L2 正则化系数
++    subsample=0.8,              # 每次采样 80% 的数据，防止过拟合
++    random_seed=42,             # 随机种子，保证可复现
++    verbose=500,                # 每500轮输出一次日志
++    early_stopping_rounds=300   # 如果300轮没提升，提前停止
++)
++cat_model.fit(X_train_imputed, y_train)
++
++# 保存模型
++with open(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\catboost_global_model_best.pkl",
++    "wb"
++) as f:
++    pickle.dump(cat_model, f)
++
++# ================= Step 4: 模型精度评估 =================
++y_pred = cat_model.predict(X_test_imputed)
++mae = mean_absolute_error(y_test, y_pred)
++rmse = root_mean_squared_error(y_test, y_pred)
++r2 = r2_score(y_test, y_pred)
++
++print("模型性能：")
++print(f"  R²(test)   = {r2:.4f}")
++print(f"  MAE        = {mae:.4f}")
++print(f"  RMSE       = {rmse:.4f}")
++
++# ================= Step 5: 特征重要性 (CatBoost Importance) =================
++importances = cat_model.feature_importances_
++cat_importance_df = pd.DataFrame({
++    "Feature": feature_names,
++    "CatBoost_Importance": importances
++})
++
++# 取前 20 个特征
++cat_importance_top20 = cat_importance_df.sort_values(by="CatBoost_Importance", ascending=False).head(20).copy()
++
++# 添加 R²(test)
++cat_importance_top20["R2_test"] = r2
++
++# 保存到 CSV
++output_path = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_CatBoost.csv"
++cat_importance_top20.to_csv(output_path, index=False)
++
++print(f"前20个CatBoost重要特征及 R² 已保存到: {output_path}")
+\ No newline at end of file
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_class_1.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_class_1.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_class_1.py
+new file mode 100644
+--- /dev/null	(date 1755618331165)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_class_1.py	(date 1755618331165)
+@@ -0,0 +1,95 @@
++import pandas as pd
++import numpy as np
++from sklearn.model_selection import train_test_split
++from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score
++import pickle
++from catboost import CatBoostRegressor
++
++# ================= Step 1: 读取数据 =================
++df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC_analysis.csv"
++)
++target_col = 'Average_Total_DOC'
++df = df.dropna(subset=[target_col])
++
++# 删除不需要的列
++drop_cols = [
++    'Annual_Increase_Rate', 'Annual_Increase_Rate_1', 'Average_Total_DOC_Area_Unit',
++    'Average_Total_DOC_1', 'Annual_Increase_Rate_DOC_Area_Unit'
++]
++df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
++# ========== Step 1.5: 筛选第一类流域（1–10 km²） ==========
++df = df[(df['area_km2'] >= 1) & (df['area_km2'] <= 10)].copy()
++# 特征
++X = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
++
++# ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========
++"""
++selected_features = ["ocd_4_mean", "center_lat", "soc_6_mean", "bdod_1_mea", "soc_5_mean", "ocd_6_mean", "cslope_mea", "soc_3_mean", "ocd_5_mean", "soc_4_mean",
++                     "ocd_3_mean", "soc_2_mean", "total_prec", "cfvo_6_mea", "t_2m_mean", "bdod_3_mea", "LS_mean", "s_epot", "terrain_12", "slope"]  # ← 请把20个变量完整填在此处
++"""
++selected_features = ["pf_disc", "pf_spor", "terrain_5", "gravelius", "terrain_14", "LS_mean", "soilt_12", "lc_20", "s_etot", "t_2m_mean",
++                     "s_NDVI_mea", "s_TCW_mean", "frac_burn", "bdod_5_mea", "bdod_6_mea", "ocd_1_mean", "bdod_1_mea", "ocs_mean", "s_soiltem4", "center_lat"]  # ← 请把20个变量完整填在此处
++
++X = X[[col for col in selected_features if col in X.columns]]
++
++feature_names = X.columns
++y = df[target_col]
++
++# ================= Step 2: 数据预处理 =================
++X_train, X_test, y_train, y_test = train_test_split(
++    X, y, test_size=0.2, random_state=42
++)
++
++X_train_imputed = X_train
++X_test_imputed = X_test
++
++# ================= Step 3: 训练 CatBoost =================
++cat_model = CatBoostRegressor(
++    iterations=10000,           # 总迭代次数（树数）
++    learning_rate=0.05,         # ← 调高学习率，收敛更快
++    depth=10,                   # 树的深度，控制模型复杂度
++    l2_leaf_reg=20,             # L2 正则化系数
++    subsample=0.8,              # 每次采样 80% 的数据，防止过拟合
++    random_seed=42,             # 随机种子，保证可复现
++    verbose=500,                # 每500轮输出一次日志
++    early_stopping_rounds=300   # 如果300轮没提升，提前停止
++)
++cat_model.fit(X_train_imputed, y_train)
++
++# 保存模型
++with open(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\catboost_global_model_best_class_1.pkl",
++    "wb"
++) as f:
++    pickle.dump(cat_model, f)
++
++# ================= Step 4: 模型精度评估 =================
++y_pred = cat_model.predict(X_test_imputed)
++mae = mean_absolute_error(y_test, y_pred)
++rmse = root_mean_squared_error(y_test, y_pred)
++r2 = r2_score(y_test, y_pred)
++
++print("模型性能：")
++print(f"  R²(test)   = {r2:.4f}")
++print(f"  MAE        = {mae:.4f}")
++print(f"  RMSE       = {rmse:.4f}")
++
++# ================= Step 5: 特征重要性 (CatBoost Importance) =================
++importances = cat_model.feature_importances_
++cat_importance_df = pd.DataFrame({
++    "Feature": feature_names,
++    "CatBoost_Importance": importances
++})
++
++# 取前 20 个特征
++cat_importance_top20 = cat_importance_df.sort_values(by="CatBoost_Importance", ascending=False).head(20).copy()
++
++# 添加 R²(test)
++cat_importance_top20["R2_test"] = r2
++
++# 保存到 CSV
++output_path = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_CatBoost_class_1.csv"
++cat_importance_top20.to_csv(output_path, index=False)
++
++print(f"前20个CatBoost重要特征及 R² 已保存到: {output_path}")
+\ No newline at end of file
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_3_20_same_all.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import pandas as pd\r\nimport numpy as np\r\nfrom sklearn.ensemble import RandomForestRegressor\r\nfrom sklearn.model_selection import train_test_split\r\nfrom sklearn.impute import SimpleImputer\r\nfrom sklearn.preprocessing import StandardScaler\r\nimport matplotlib.pyplot as plt\r\nimport seaborn as sns\r\nimport shap\r\nfrom matplotlib.ticker import MultipleLocator, FormatStrFormatter\r\n\r\n# ========== Step 1: 读取数据 ==========\r\ndf = pd.read_csv(r\"D:\\UZH\\2024\\20240122 Nutrient and Organic Carbon references\\3_river_mouth_DOC\\DOC_update_20250203\\Total_DOC_average\\All_Properites_DOC.csv\")\r\ntarget_col = 'Average_Total_DOC_1'\r\ndf = df.dropna(subset=[target_col])\r\n\r\n# ========== Step 1.5: 筛选第一类流域（1–10 km²） ==========\r\ndf = df[(df['area_km2'] >= 100) & (df['area_km2'] <= 1000)].copy()\r\n\r\ndrop_cols = ['Average_Total_DOC', 'Average_Total_DOC_Area_Unit', 'Annual_Increase_Rate_1', 'Annual_Increase_Rate_DOC_Area_Unit', 'Average_Total_DOC_Uncertainty', 'center_lon', 'COMID', 'Annual_Increase_Rate', 'Intercept', 'R_Value', 'P_Value', 'Std_Err', 'Num_same_COMID']\r\ndf = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')\r\n\r\nX = df.drop(columns=[target_col])\r\ny = df[target_col]\r\nX = X.select_dtypes(include=[np.number])\r\nfeature_names = X.columns\r\n\r\n# ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========\r\nselected_features = [\"pf_disc\", \"soilt_12\", \"s_NDVI_mea\", \"frac_burn\", \"ocd_1_mean\", \"bdod_1_mea\", \"gravelius\", \"s_etot\", \"pf_spor\", \"terrain_14\",\r\n                     \"lc_20\", \"bdod_6_mea\", \"ocs_mean\", \"s_TCW_mean\", \"t_2m_mean\", \"center_lat\", \"LS_mean\", \"terrain_5\", \"s_soiltem4\", \"bdod_5_mea\"]  # ← 请把20个变量完整填在此处\r\nX = X[[col for col in selected_features if col in X.columns]]\r\nfeature_names = X.columns.tolist()\r\n\r\n# ========== Step 2: 数据预处理 ==========\r\nimputer = SimpleImputer(strategy='mean')\r\nX_imputed = imputer.fit_transform(X)\r\n\r\nscaler = StandardScaler()\r\nX_scaled = scaler.fit_transform(X_imputed)\r\n\r\nX_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)\r\n\r\n# ========== Step 3: 训练模型 ==========\r\nmodel = RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1)\r\nmodel.fit(X_train, y_train)\r\n\r\n# ========== Step 4: 特征重要性 ==========\r\nimportances = model.feature_importances_\r\n\r\ntop_n = 20\r\ntop_indices = np.argsort(importances)[::-1][:top_n]\r\ntop_features = np.array(feature_names)[top_indices]\r\ntop_importances = importances[top_indices]\r\n\r\n# 相对这20个变量之和的比例（总和为1）\r\ntop_importance_sum = np.sum(top_importances)\r\ntop_relative_importances = top_importances / top_importance_sum\r\n\r\n# ========== Step 5: SHAP 值计算 ==========\r\nexplainer = shap.Explainer(model, X_train, feature_perturbation='interventional')\r\nshap_values = explainer(X_train, approximate=True, check_additivity=False)\r\ntop_shap_values = shap_values[:, top_indices]\r\nshap_means = np.abs(top_shap_values.values).mean(axis=0)\r\nshap_directions = top_shap_values.values.mean(axis=0)\r\n\r\n# ========== Step 6: 构建结果表 ==========\r\nresult_df = pd.DataFrame({\r\n    'Feature': top_features,\r\n    'Relative_Importance': top_relative_importances,\r\n    'SHAP_MeanAbs': shap_means,\r\n    'SHAP_Mean': shap_directions,\r\n    'SHAP_Direction': ['+' if val > 0 else '−' for val in shap_directions]\r\n})\r\nresult_df = result_df.sort_values(by='Relative_Importance', ascending=False)\r\n\r\n# ========== Step 6.1: 保存 CSV ==========\r\noutput_path_csv = r\"D:\\UZH\\2024\\20240122 Nutrient and Organic Carbon references\\3_river_mouth_DOC\\DOC_update_20250203\\Total_DOC_average\\Top20_Feature_Importance_class_3_same_all.csv\"\r\nresult_df[['Feature', 'Relative_Importance']].to_csv(output_path_csv, index=False)\r\n\r\n# ========== Step 7: 绘图 ==========\r\npositive_color = '#e66101'  # 橙色，代表正向 SHAP\r\nnegative_color = '#5e3c99'  # 紫蓝色，代表负向 SHAP\r\n\r\nplt.rcParams[\"font.family\"] = \"Arial\"\r\nplt.rcParams[\"font.size\"] = 6\r\nplt.figure(figsize=(8.4/2.54, 5/2.54), dpi=600)\r\n\r\ncolors = [positive_color if val > 0 else negative_color for val in result_df['SHAP_Mean']]\r\n\r\nsns.barplot(\r\n    y=result_df['Feature'],\r\n    x=result_df['Relative_Importance'],\r\n    palette=colors\r\n)\r\n\r\nplt.grid(True, which='both', linestyle='--', alpha=0.5)\r\nplt.xlabel('Relative Importance (Top 20 Features)')\r\nplt.ylabel('')\r\n\r\n# 设置 x 轴刻度间隔为 0.02，保留两位小数\r\nax = plt.gca()\r\nax.xaxis.set_major_locator(MultipleLocator(0.02))\r\nax.xaxis.set_major_formatter(FormatStrFormatter('%.2f'))\r\n\r\nplt.tight_layout()\r\n\r\n# ========== Step 8: 保存图像 ==========\r\noutput_path_fig = r\"D:\\UZH\\2024\\20240122 Nutrient and Organic Carbon references\\3_river_mouth_DOC\\DOC_update_20250203\\Total_DOC_average\\Top20_Feature_Importance_Class3_same_all.tif\"\r\nplt.savefig(output_path_fig, dpi=600, bbox_inches='tight', pad_inches=0.001, format='tiff')\r\nplt.show()\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_3_20_same_all.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_3_20_same_all.py
+--- a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_3_20_same_all.py	(revision babff9c9eb6361fc1f9f2650676589b479b3a31d)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_3_20_same_all.py	(date 1755085617278)
+@@ -8,14 +8,15 @@
+ import seaborn as sns
+ import shap
+ from matplotlib.ticker import MultipleLocator, FormatStrFormatter
+-
++import pickle
+ # ========== Step 1: 读取数据 ==========
+ df = pd.read_csv(r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC.csv")
+ target_col = 'Average_Total_DOC_1'
+ df = df.dropna(subset=[target_col])
+ 
+ # ========== Step 1.5: 筛选第一类流域（1–10 km²） ==========
+-df = df[(df['area_km2'] >= 100) & (df['area_km2'] <= 1000)].copy()
++# df = df[(df['area_km2'] >= 100) & (df['area_km2'] <= 1000)].copy()
++df = df[(df['area_km2'] >= 100)].copy()
+ 
+ drop_cols = ['Average_Total_DOC', 'Average_Total_DOC_Area_Unit', 'Annual_Increase_Rate_1', 'Annual_Increase_Rate_DOC_Area_Unit', 'Average_Total_DOC_Uncertainty', 'center_lon', 'COMID', 'Annual_Increase_Rate', 'Intercept', 'R_Value', 'P_Value', 'Std_Err', 'Num_same_COMID']
+ df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
+@@ -25,12 +26,20 @@
+ X = X.select_dtypes(include=[np.number])
+ feature_names = X.columns
+ 
++
+ # ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========
+ selected_features = ["pf_disc", "soilt_12", "s_NDVI_mea", "frac_burn", "ocd_1_mean", "bdod_1_mea", "gravelius", "s_etot", "pf_spor", "terrain_14",
+                      "lc_20", "bdod_6_mea", "ocs_mean", "s_TCW_mean", "t_2m_mean", "center_lat", "LS_mean", "terrain_5", "s_soiltem4", "bdod_5_mea"]  # ← 请把20个变量完整填在此处
+ X = X[[col for col in selected_features if col in X.columns]]
+ feature_names = X.columns.tolist()
+ 
++"""
++# ========== Step 2: 加载已保存模型 ==========
++model_path = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\rf_global_model.pkl"
++with open(model_path, "rb") as f:
++    model = pickle.load(f)
++"""
++
+ # ========== Step 2: 数据预处理 ==========
+ imputer = SimpleImputer(strategy='mean')
+ X_imputed = imputer.fit_transform(X)
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_2_20_same_all.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import pandas as pd\r\nimport numpy as np\r\nfrom sklearn.ensemble import RandomForestRegressor\r\nfrom sklearn.model_selection import train_test_split\r\nfrom sklearn.impute import SimpleImputer\r\nfrom sklearn.preprocessing import StandardScaler\r\nimport matplotlib.pyplot as plt\r\nimport seaborn as sns\r\nimport shap\r\n\r\n# ========== Step 1: 读取数据 ==========\r\ndf = pd.read_csv(r\"D:\\UZH\\2024\\20240122 Nutrient and Organic Carbon references\\3_river_mouth_DOC\\DOC_update_20250203\\Total_DOC_average\\All_Properites_DOC.csv\")\r\ntarget_col = 'Average_Total_DOC_1'\r\ndf = df.dropna(subset=[target_col])\r\n\r\n# ========== Step 1.5: 筛选第一类流域（1–10 km²） ==========\r\ndf = df[(df['area_km2'] >= 10) & (df['area_km2'] <= 100)].copy()\r\n\r\ndrop_cols = ['Average_Total_DOC', 'Average_Total_DOC_Area_Unit', 'Annual_Increase_Rate_1', 'Annual_Increase_Rate_DOC_Area_Unit', 'Average_Total_DOC_Uncertainty', 'center_lon', 'COMID', 'Annual_Increase_Rate', 'Intercept', 'R_Value', 'P_Value', 'Std_Err', 'Num_same_COMID']\r\ndf = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')\r\n\r\nX = df.drop(columns=[target_col])\r\ny = df[target_col]\r\nX = X.select_dtypes(include=[np.number])\r\nfeature_names = X.columns\r\n\r\n# ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========\r\nselected_features = [\"pf_disc\", \"soilt_12\", \"s_NDVI_mea\", \"frac_burn\", \"ocd_1_mean\", \"bdod_1_mea\", \"gravelius\", \"s_etot\", \"pf_spor\", \"terrain_14\",\r\n                     \"lc_20\", \"bdod_6_mea\", \"ocs_mean\", \"s_TCW_mean\", \"t_2m_mean\", \"center_lat\", \"LS_mean\", \"terrain_5\", \"s_soiltem4\", \"bdod_5_mea\"]  # ← 请把20个变量完整填在此处\r\nX = X[[col for col in selected_features if col in X.columns]]\r\nfeature_names = X.columns.tolist()\r\n\r\n# ========== Step 2: 数据预处理 ==========\r\nimputer = SimpleImputer(strategy='mean')\r\nX_imputed = imputer.fit_transform(X)\r\n\r\nscaler = StandardScaler()\r\nX_scaled = scaler.fit_transform(X_imputed)\r\n\r\nX_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)\r\n\r\n# ========== Step 3: 训练模型 ==========\r\nmodel = RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1)\r\nmodel.fit(X_train, y_train)\r\n\r\n# ========== Step 4: 特征重要性 ==========\r\nimportances = model.feature_importances_\r\n\r\ntop_n = 20\r\ntop_indices = np.argsort(importances)[::-1][:top_n]\r\ntop_features = np.array(feature_names)[top_indices]\r\ntop_importances = importances[top_indices]\r\n\r\n# 相对这20个变量之和的比例（总和为1）\r\ntop_importance_sum = np.sum(top_importances)\r\ntop_relative_importances = top_importances / top_importance_sum\r\n\r\n# ========== Step 5: SHAP 值计算 ==========\r\nexplainer = shap.Explainer(model, X_train, feature_perturbation='interventional')\r\nshap_values = explainer(X_train, approximate=True, check_additivity=False)\r\ntop_shap_values = shap_values[:, top_indices]\r\nshap_means = np.abs(top_shap_values.values).mean(axis=0)\r\nshap_directions = top_shap_values.values.mean(axis=0)\r\n\r\n# ========== Step 6: 构建结果表 ==========\r\nresult_df = pd.DataFrame({\r\n    'Feature': top_features,\r\n    'Relative_Importance': top_relative_importances,\r\n    'SHAP_MeanAbs': shap_means,\r\n    'SHAP_Mean': shap_directions,\r\n    'SHAP_Direction': ['+' if val > 0 else '−' for val in shap_directions]\r\n})\r\nresult_df = result_df.sort_values(by='Relative_Importance', ascending=False)\r\n\r\n# ========== Step 6.1: 保存 CSV ==========\r\noutput_path_csv = r\"D:\\UZH\\2024\\20240122 Nutrient and Organic Carbon references\\3_river_mouth_DOC\\DOC_update_20250203\\Total_DOC_average\\Top20_Feature_Importance_class_2_same_all.csv\"\r\nresult_df[['Feature', 'Relative_Importance']].to_csv(output_path_csv, index=False)\r\n\r\n# ========== Step 7: 绘图 ==========\r\npositive_color = '#e66101'  # 橙色，代表正向 SHAP\r\nnegative_color = '#5e3c99'  # 紫蓝色，代表负向 SHAP\r\n\r\nplt.rcParams[\"font.family\"] = \"Arial\"\r\nplt.rcParams[\"font.size\"] = 6\r\nplt.figure(figsize=(8.4/2.54, 5/2.54), dpi=600)\r\n\r\ncolors = [positive_color if val > 0 else negative_color for val in result_df['SHAP_Mean']]\r\n\r\nsns.barplot(\r\n    y=result_df['Feature'],\r\n    x=result_df['Relative_Importance'],\r\n    palette=colors\r\n)\r\n\r\nplt.grid(True, which='both', linestyle='--', alpha=0.5)\r\nplt.xlabel('Relative Importance (Top 20 Features)')\r\nplt.ylabel('')\r\n\r\nplt.tight_layout()\r\n\r\n# ========== Step 8: 保存图像 ==========\r\noutput_path_fig = r\"D:\\UZH\\2024\\20240122 Nutrient and Organic Carbon references\\3_river_mouth_DOC\\DOC_update_20250203\\Total_DOC_average\\Top20_Feature_Importance_Class2_same_all.tif\"\r\nplt.savefig(output_path_fig, dpi=600, bbox_inches='tight', pad_inches=0.001, format='tiff')\r\nplt.show()\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_2_20_same_all.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_2_20_same_all.py
+--- a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_2_20_same_all.py	(revision babff9c9eb6361fc1f9f2650676589b479b3a31d)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_2_20_same_all.py	(date 1754985795785)
+@@ -7,7 +7,7 @@
+ import matplotlib.pyplot as plt
+ import seaborn as sns
+ import shap
+-
++import pickle
+ # ========== Step 1: 读取数据 ==========
+ df = pd.read_csv(r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC.csv")
+ target_col = 'Average_Total_DOC_1'
+@@ -24,11 +24,17 @@
+ X = X.select_dtypes(include=[np.number])
+ feature_names = X.columns
+ 
++"""
+ # ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========
+ selected_features = ["pf_disc", "soilt_12", "s_NDVI_mea", "frac_burn", "ocd_1_mean", "bdod_1_mea", "gravelius", "s_etot", "pf_spor", "terrain_14",
+                      "lc_20", "bdod_6_mea", "ocs_mean", "s_TCW_mean", "t_2m_mean", "center_lat", "LS_mean", "terrain_5", "s_soiltem4", "bdod_5_mea"]  # ← 请把20个变量完整填在此处
+ X = X[[col for col in selected_features if col in X.columns]]
+ feature_names = X.columns.tolist()
++"""
++# ========== Step 2: 加载已保存模型 ==========
++model_path = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\rf_global_model.pkl"
++with open(model_path, "rb") as f:
++    model = pickle.load(f)
+ 
+ # ========== Step 2: 数据预处理 ==========
+ imputer = SimpleImputer(strategy='mean')
+@@ -37,12 +43,6 @@
+ scaler = StandardScaler()
+ X_scaled = scaler.fit_transform(X_imputed)
+ 
+-X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+-
+-# ========== Step 3: 训练模型 ==========
+-model = RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1)
+-model.fit(X_train, y_train)
+-
+ # ========== Step 4: 特征重要性 ==========
+ importances = model.feature_importances_
+ 
+@@ -56,8 +56,8 @@
+ top_relative_importances = top_importances / top_importance_sum
+ 
+ # ========== Step 5: SHAP 值计算 ==========
+-explainer = shap.Explainer(model, X_train, feature_perturbation='interventional')
+-shap_values = explainer(X_train, approximate=True, check_additivity=False)
++explainer = shap.Explainer(model, X_scaled, feature_perturbation='interventional')
++shap_values = explainer(X_scaled, approximate=True, check_additivity=False)
+ top_shap_values = shap_values[:, top_indices]
+ shap_means = np.abs(top_shap_values.values).mean(axis=0)
+ shap_directions = top_shap_values.values.mean(axis=0)
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_1_20_LightGBM.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_1_20_LightGBM.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_1_20_LightGBM.py
+new file mode 100644
+--- /dev/null	(date 1755508248594)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_1_20_LightGBM.py	(date 1755508248594)
+@@ -0,0 +1,88 @@
++import pandas as pd
++import numpy as np
++from sklearn.model_selection import train_test_split
++from sklearn.impute import SimpleImputer
++from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
++import shap
++import pickle
++import lightgbm as lgb
++
++# ================= Step 1: 读取数据 =================
++df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC_analysis.csv"
++)
++target_col = 'Average_Total_DOC'
++df = df.dropna(subset=[target_col])
++
++# ========== Step 1.5: 筛选第一类流域（1–10 km²） ==========
++df = df[(df['area_km2'] >= 1) & (df['area_km2'] <= 10)].copy()
++
++# 删除不需要的列
++drop_cols = [
++     'Annual_Increase_Rate',  'Annual_Increase_Rate_1', 'Average_Total_DOC_Area_Unit',
++     'Average_Total_DOC_1', 'Annual_Increase_Rate_DOC_Area_Unit'
++]
++df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
++
++# 特征
++X = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
++feature_names = X.columns
++y = df[target_col]
++
++# ================= Step 2: 数据预处理 =================
++X_train, X_test, y_train, y_test = train_test_split(
++    X, y, test_size=0.2, random_state=42
++)
++
++imputer = SimpleImputer(strategy='mean')
++X_train_imputed = imputer.fit_transform(X_train)
++X_test_imputed = imputer.transform(X_test)
++
++# ================= Step 3: 训练 LightGBM =================
++lgb_model = lgb.LGBMRegressor(
++    n_estimators=500,       # 树的数量
++    learning_rate=0.05,     # 学习率
++    max_depth=6,            # 树的最大深度
++    subsample=0.8,          # 样本采样比例
++    colsample_bytree=0.8,   # 特征采样比例
++    random_state=42,
++    n_jobs=-1
++)
++lgb_model.fit(X_train_imputed, y_train)
++
++# 保存模型
++with open(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\lgb_global_model_best_class_1.pkl",
++    "wb"
++) as f:
++    pickle.dump(lgb_model, f)
++
++# ================= Step 4: 模型精度评估 =================
++y_pred = lgb_model.predict(X_test_imputed)
++mae = mean_absolute_error(y_test, y_pred)
++rmse = mean_squared_error(y_test, y_pred, squared=False)
++r2 = r2_score(y_test, y_pred)
++
++print("模型性能：")
++print(f"  R²(test)   = {r2:.4f}")
++print(f"  MAE        = {mae:.4f}")
++print(f"  RMSE       = {rmse:.4f}")
++
++# ================= Step 5: 特征重要性 (LightGBM Importance) =================
++importances = lgb_model.feature_importances_
++lgb_importance_df = pd.DataFrame({
++    "Feature": feature_names,
++    "LGB_Importance": importances
++})
++
++# 取前 20 个特征
++lgb_importance_top20 = lgb_importance_df.sort_values(by="LGB_Importance", ascending=False).head(20).copy()
++
++# 添加 R²(test) 列
++lgb_importance_top20["R2_test"] = r2
++
++# 保存到 CSV
++output_path = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_LGB_class_1.csv"
++lgb_importance_top20.to_csv(output_path, index=False)
++
++print(f"前20个LGB重要特征及 R² 已保存到: {output_path}")
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_1_20_XGBoost.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_1_20_XGBoost.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_1_20_XGBoost.py
+new file mode 100644
+--- /dev/null	(date 1755508100821)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_1_20_XGBoost.py	(date 1755508100821)
+@@ -0,0 +1,88 @@
++import pandas as pd
++import numpy as np
++from sklearn.model_selection import train_test_split
++from sklearn.impute import SimpleImputer
++from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
++import shap
++import pickle
++import xgboost as xgb
++
++# ================= Step 1: 读取数据 =================
++df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC_analysis.csv"
++)
++target_col = 'Average_Total_DOC'
++df = df.dropna(subset=[target_col])
++
++# ========== Step 1.5: 筛选第一类流域（1–10 km²） ==========
++df = df[(df['area_km2'] >= 1) & (df['area_km2'] <= 10)].copy()
++
++# 删除不需要的列
++drop_cols = [
++     'Annual_Increase_Rate',  'Annual_Increase_Rate_1', 'Average_Total_DOC_Area_Unit',
++     'Average_Total_DOC_1', 'Annual_Increase_Rate_DOC_Area_Unit'
++]
++df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
++
++# 特征
++X = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
++feature_names = X.columns
++y = df[target_col]
++
++# ================= Step 2: 数据预处理 =================
++X_train, X_test, y_train, y_test = train_test_split(
++    X, y, test_size=0.2, random_state=42
++)
++
++imputer = SimpleImputer(strategy='mean')
++X_train_imputed = imputer.fit_transform(X_train)
++X_test_imputed = imputer.transform(X_test)
++
++# ================= Step 3: 训练 XGBoost =================
++xgb_model = xgb.XGBRegressor(
++    n_estimators=500,        # 树的数量
++    learning_rate=0.05,      # 学习率
++    max_depth=6,             # 树的最大深度
++    subsample=0.8,           # 样本采样比例
++    colsample_bytree=0.8,    # 特征采样比例
++    random_state=42,
++    n_jobs=-1
++)
++xgb_model.fit(X_train_imputed, y_train)
++
++# 保存模型
++with open(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\xgb_global_model_best_class_1.pkl",
++    "wb"
++) as f:
++    pickle.dump(xgb_model, f)
++
++# ================= Step 4: 模型精度评估 =================
++y_pred = xgb_model.predict(X_test_imputed)
++mae = mean_absolute_error(y_test, y_pred)
++rmse = mean_squared_error(y_test, y_pred, squared=False)
++r2 = r2_score(y_test, y_pred)
++
++print("模型性能：")
++print(f"  R²(test)   = {r2:.4f}")
++print(f"  MAE        = {mae:.4f}")
++print(f"  RMSE       = {rmse:.4f}")
++
++# ================= Step 5: 特征重要性 (XGBoost Importance) =================
++importances = xgb_model.feature_importances_
++xgb_importance_df = pd.DataFrame({
++    "Feature": feature_names,
++    "XGB_Importance": importances
++})
++
++# 取前 20 个特征
++xgb_importance_top20 = xgb_importance_df.sort_values(by="XGB_Importance", ascending=False).head(20).copy()
++
++# 添加 R²(test) 列
++xgb_importance_top20["R2_test"] = r2
++
++# 保存到 CSV
++output_path = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_XGB_class_1.csv"
++xgb_importance_top20.to_csv(output_path, index=False)
++
++print(f"前20个XGB重要特征及 R² 已保存到: {output_path}")
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_SHAP_class_1.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_SHAP_class_1.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_SHAP_class_1.py
+new file mode 100644
+--- /dev/null	(date 1755618331136)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_SHAP_class_1.py	(date 1755618331136)
+@@ -0,0 +1,108 @@
++# ================= 程序 2 =================
++import pandas as pd
++import numpy as np
++import shap
++import matplotlib.pyplot as plt
++import seaborn as sns
++import pickle
++from sklearn.impute import SimpleImputer
++from sklearn.model_selection import train_test_split
++
++# ===== Step 1: 读取数据 & 模型 =====
++df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC_analysis.csv"
++)
++target_col = 'Average_Total_DOC'
++df = df.dropna(subset=[target_col])
++
++# 删除不需要的列
++drop_cols = [
++    'Annual_Increase_Rate', 'Annual_Increase_Rate_1', 'Average_Total_DOC_Area_Unit',
++    'Average_Total_DOC_1', 'Annual_Increase_Rate_DOC_Area_Unit'
++]
++df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
++
++# ========== Step 1.5: 筛选第一类流域（1–10 km²） ==========
++df = df[(df['area_km2'] >= 1) & (df['area_km2'] <= 10)].copy()
++
++X = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
++# ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========
++selected_features = ["pf_disc", "pf_spor", "terrain_5", "gravelius", "terrain_14", "LS_mean", "soilt_12", "lc_20", "s_etot", "t_2m_mean",
++                     "s_NDVI_mea", "s_TCW_mean", "frac_burn", "bdod_5_mea", "bdod_6_mea", "ocd_1_mean", "bdod_1_mea", "ocs_mean", "s_soiltem4", "center_lat"]  # ← 请把20个变量完整填在此处
++
++X = X[[col for col in selected_features if col in X.columns]]
++
++feature_names = X.columns
++
++y = df[target_col]
++
++X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
++imputer = SimpleImputer(strategy='mean')
++X_test_imputed = imputer.fit_transform(X_test)
++
++# ===== Step 2: 读取模型 =====
++with open(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\catboost_global_model_best_class_1.pkl",
++    "rb"
++) as f:
++    rf = pickle.load(f)
++
++# ===== Step 3: 读取前 20 特征 =====
++top20_df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_CatBoost_class_1.csv"
++)
++top_features = top20_df["Feature"].tolist()
++X_test_top20 = pd.DataFrame(X_test_imputed, columns=X.columns)[top_features]
++
++# ===== Step 4: SHAP 分析 =====
++explainer = shap.TreeExplainer(rf, feature_perturbation="tree_path_dependent")
++# 为了加速，可以只取测试集的一部分样本
++X_shap = shap.sample(X_test_top20, 1000, random_state=42)
++
++# 计算 SHAP 值（CatBoost 不支持 approximate=True）
++shap_vals = explainer.shap_values(X_shap, check_additivity=False)
++
++# 计算 SHAP 重要性
++shap_importances = np.abs(shap_vals).mean(axis=0)
++shap_directions = shap_vals.mean(axis=0)
++shap_percent = shap_importances / shap_importances.sum() * 100  # 百分比
++
++# 保存结果
++result_df = pd.DataFrame({
++    "Feature": top_features,
++    "SHAP_MeanAbs": shap_importances,
++    "SHAP_Mean": shap_directions,
++    "Importance(%)": shap_percent,
++    "SHAP_Direction": ["+" if v > 0 else "−" for v in shap_directions]
++}).sort_values(by="SHAP_MeanAbs", ascending=False)
++
++result_df.to_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_SHAP_class_1.csv",
++    index=False
++)
++
++plt.rcParams["font.family"] = "Arial"
++plt.rcParams["font.size"] = 6
++
++# ===== Step 5: barplot 可视化 =====
++positive_color = '#e66101'  # 橙色，代表正向 SHAP
++negative_color = '#5e3c99'  # 紫蓝色，代表负向 SHAP
++colors = [positive_color if val > 0 else negative_color for val in result_df['SHAP_Mean']]
++
++plt.figure(figsize=(8.4/2.54, 5/2.54), dpi=300)
++sns.barplot(
++    y=result_df['Feature'],
++    x=result_df['Importance(%)'],
++    palette=colors,
++    dodge=False,
++    errorbar=None
++)
++plt.grid(True, which='both', linestyle='--', alpha=0.5)
++plt.xlabel('SHAP importance(%)')
++plt.ylabel('')
++plt.tight_layout()
++plt.savefig(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_SHAP_bar_class_1.tif",
++    dpi=300, bbox_inches='tight', pad_inches=0.001, format='tiff'
++)
++plt.close()
+\ No newline at end of file
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_SHAP.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_SHAP.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_SHAP.py
+new file mode 100644
+--- /dev/null	(date 1755618331121)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_SHAP.py	(date 1755618331121)
+@@ -0,0 +1,104 @@
++# ================= 程序 2 =================
++import pandas as pd
++import numpy as np
++import shap
++import matplotlib.pyplot as plt
++import seaborn as sns
++import pickle
++from sklearn.impute import SimpleImputer
++from sklearn.model_selection import train_test_split
++
++# ===== Step 1: 读取数据 & 模型 =====
++df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC_analysis.csv"
++)
++target_col = 'Average_Total_DOC'
++df = df.dropna(subset=[target_col])
++
++# 删除不需要的列
++drop_cols = [
++    'Annual_Increase_Rate', 'Annual_Increase_Rate_1', 'Average_Total_DOC_Area_Unit',
++    'Average_Total_DOC_1', 'Annual_Increase_Rate_DOC_Area_Unit'
++]
++df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
++X = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
++# ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========
++selected_features = ["pf_disc", "pf_spor", "terrain_5", "gravelius", "terrain_14", "LS_mean", "soilt_12", "lc_20", "s_etot", "t_2m_mean",
++                     "s_NDVI_mea", "s_TCW_mean", "frac_burn", "bdod_5_mea", "bdod_6_mea", "ocd_1_mean", "bdod_1_mea", "ocs_mean", "s_soiltem4", "center_lat"]  # ← 请把20个变量完整填在此处
++
++X = X[[col for col in selected_features if col in X.columns]]
++
++feature_names = X.columns
++
++y = df[target_col]
++
++X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
++imputer = SimpleImputer(strategy='mean')
++X_test_imputed = imputer.fit_transform(X_test)
++
++# ===== Step 2: 读取模型 =====
++with open(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\catboost_global_model_best.pkl",
++    "rb"
++) as f:
++    rf = pickle.load(f)
++
++# ===== Step 3: 读取前 20 特征 =====
++top20_df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_CatBoost.csv"
++)
++top_features = top20_df["Feature"].tolist()
++X_test_top20 = pd.DataFrame(X_test_imputed, columns=X.columns)[top_features]
++
++# ===== Step 4: SHAP 分析 =====
++explainer = shap.TreeExplainer(rf, feature_perturbation="tree_path_dependent")
++# 为了加速，可以只取测试集的一部分样本
++X_shap = shap.sample(X_test_top20, 1000, random_state=42)
++
++# 计算 SHAP 值（CatBoost 不支持 approximate=True）
++shap_vals = explainer.shap_values(X_shap, check_additivity=False)
++
++# 计算 SHAP 重要性
++shap_importances = np.abs(shap_vals).mean(axis=0)
++shap_directions = shap_vals.mean(axis=0)
++shap_percent = shap_importances / shap_importances.sum() * 100  # 百分比
++
++# 保存结果
++result_df = pd.DataFrame({
++    "Feature": top_features,
++    "SHAP_MeanAbs": shap_importances,
++    "SHAP_Mean": shap_directions,
++    "Importance(%)": shap_percent,
++    "SHAP_Direction": ["+" if v > 0 else "−" for v in shap_directions]
++}).sort_values(by="SHAP_MeanAbs", ascending=False)
++
++result_df.to_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_SHAP.csv",
++    index=False
++)
++
++plt.rcParams["font.family"] = "Arial"
++plt.rcParams["font.size"] = 6
++
++# ===== Step 5: barplot 可视化 =====
++positive_color = '#e66101'  # 橙色，代表正向 SHAP
++negative_color = '#5e3c99'  # 紫蓝色，代表负向 SHAP
++colors = [positive_color if val > 0 else negative_color for val in result_df['SHAP_Mean']]
++
++plt.figure(figsize=(8.4/2.54, 5/2.54), dpi=300)
++sns.barplot(
++    y=result_df['Feature'],
++    x=result_df['Importance(%)'],
++    palette=colors,
++    dodge=False,
++    errorbar=None
++)
++plt.grid(True, which='both', linestyle='--', alpha=0.5)
++plt.xlabel('SHAP importance(%)')
++plt.ylabel('')
++plt.tight_layout()
++plt.savefig(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_SHAP_bar.tif",
++    dpi=300, bbox_inches='tight', pad_inches=0.001, format='tiff'
++)
++plt.close()
+\ No newline at end of file
+Index: test.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/test.py b/test.py
+new file mode 100644
+--- /dev/null	(date 1755422737263)
++++ b/test.py	(date 1755422737263)
+@@ -0,0 +1,5 @@
++import shap
++print(shap.__version__)
++
++# 测试 GPU 是否可用
++shap.utils.gpu_support()
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_1_20_same_all.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import pandas as pd\r\nimport numpy as np\r\nfrom sklearn.ensemble import RandomForestRegressor\r\nfrom sklearn.model_selection import train_test_split\r\nfrom sklearn.impute import SimpleImputer\r\nfrom sklearn.preprocessing import StandardScaler\r\nimport matplotlib.pyplot as plt\r\nimport seaborn as sns\r\nimport shap\r\n\r\n# ========== Step 1: 读取数据 ==========\r\ndf = pd.read_csv(r\"D:\\UZH\\2024\\20240122 Nutrient and Organic Carbon references\\3_river_mouth_DOC\\DOC_update_20250203\\Total_DOC_average\\All_Properites_DOC.csv\")\r\ntarget_col = 'Average_Total_DOC_1'\r\ndf = df.dropna(subset=[target_col])\r\n\r\n# ========== Step 1.5: 筛选第一类流域（1–10 km²） ==========\r\ndf = df[(df['area_km2'] >= 1) & (df['area_km2'] <= 10)].copy()\r\n\r\ndrop_cols = ['Average_Total_DOC', 'Average_Total_DOC_Area_Unit', 'Annual_Increase_Rate_1', 'Annual_Increase_Rate_DOC_Area_Unit', 'Average_Total_DOC_Uncertainty', 'center_lon', 'COMID', 'Annual_Increase_Rate', 'Intercept', 'R_Value', 'P_Value', 'Std_Err', 'Num_same_COMID']\r\ndf = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')\r\n\r\nX = df.drop(columns=[target_col])\r\ny = df[target_col]\r\nX = X.select_dtypes(include=[np.number])\r\nfeature_names = X.columns\r\n\r\n# ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========\r\nselected_features = [\"pf_disc\", \"soilt_12\", \"s_NDVI_mea\", \"frac_burn\", \"ocd_1_mean\", \"bdod_1_mea\", \"gravelius\", \"s_etot\", \"pf_spor\", \"terrain_14\",\r\n                     \"lc_20\", \"bdod_6_mea\", \"ocs_mean\", \"s_TCW_mean\", \"t_2m_mean\", \"center_lat\", \"LS_mean\", \"terrain_5\", \"s_soiltem4\", \"bdod_5_mea\"]  # ← 请把20个变量完整填在此处\r\nX = X[[col for col in selected_features if col in X.columns]]\r\nfeature_names = X.columns.tolist()\r\n\r\n# ========== Step 2: 数据预处理 ==========\r\nimputer = SimpleImputer(strategy='mean')\r\nX_imputed = imputer.fit_transform(X)\r\n\r\nscaler = StandardScaler()\r\nX_scaled = scaler.fit_transform(X_imputed)\r\n\r\nX_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)\r\n\r\n# ========== Step 3: 训练模型 ==========\r\nmodel = RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1)\r\nmodel.fit(X_train, y_train)\r\n\r\n# ========== Step 4: 特征重要性 ==========\r\nimportances = model.feature_importances_\r\n\r\ntop_n = 20\r\ntop_indices = np.argsort(importances)[::-1][:top_n]\r\ntop_features = np.array(feature_names)[top_indices]\r\ntop_importances = importances[top_indices]\r\n\r\n# 相对这20个变量之和的比例（总和为1）\r\ntop_importance_sum = np.sum(top_importances)\r\ntop_relative_importances = top_importances / top_importance_sum\r\n\r\n# ========== Step 5: SHAP 值计算 ==========\r\nexplainer = shap.Explainer(model, X_train, feature_perturbation='interventional')\r\nshap_values = explainer(X_train, approximate=True, check_additivity=False)\r\ntop_shap_values = shap_values[:, top_indices]\r\nshap_means = np.abs(top_shap_values.values).mean(axis=0)\r\nshap_directions = top_shap_values.values.mean(axis=0)\r\n\r\n# ========== Step 6: 构建结果表 ==========\r\nresult_df = pd.DataFrame({\r\n    'Feature': top_features,\r\n    'Relative_Importance': top_relative_importances,\r\n    'SHAP_MeanAbs': shap_means,\r\n    'SHAP_Mean': shap_directions,\r\n    'SHAP_Direction': ['+' if val > 0 else '−' for val in shap_directions]\r\n})\r\nresult_df = result_df.sort_values(by='Relative_Importance', ascending=False)\r\n\r\n# ========== Step 6.1: 保存 CSV ==========\r\noutput_path_csv = r\"D:\\UZH\\2024\\20240122 Nutrient and Organic Carbon references\\3_river_mouth_DOC\\DOC_update_20250203\\Total_DOC_average\\Top20_Feature_Importance_class_1_same_all.csv\"\r\nresult_df[['Feature', 'Relative_Importance']].to_csv(output_path_csv, index=False)\r\n\r\n# ========== Step 7: 绘图 ==========\r\npositive_color = '#e66101'  # 橙色，代表正向 SHAP\r\nnegative_color = '#5e3c99'  # 紫蓝色，代表负向 SHAP\r\n\r\nplt.rcParams[\"font.family\"] = \"Arial\"\r\nplt.rcParams[\"font.size\"] = 6\r\nplt.figure(figsize=(8.4/2.54, 5/2.54), dpi=600)\r\n\r\ncolors = [positive_color if val > 0 else negative_color for val in result_df['SHAP_Mean']]\r\n\r\nsns.barplot(\r\n    y=result_df['Feature'],\r\n    x=result_df['Relative_Importance'],\r\n    palette=colors\r\n)\r\n\r\nplt.grid(True, which='both', linestyle='--', alpha=0.5)\r\nplt.xlabel('Relative Importance (Top 20 Features)')\r\nplt.ylabel('')\r\n\r\nplt.tight_layout()\r\n\r\n# ========== Step 8: 保存图像 ==========\r\noutput_path_fig = r\"D:\\UZH\\2024\\20240122 Nutrient and Organic Carbon references\\3_river_mouth_DOC\\DOC_update_20250203\\Total_DOC_average\\Top20_Feature_Importance_Class1_same_all.tif\"\r\nplt.savefig(output_path_fig, dpi=600, bbox_inches='tight', pad_inches=0.001, format='tiff')\r\nplt.show()\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_1_20_same_all.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_1_20_same_all.py
+--- a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_1_20_same_all.py	(revision babff9c9eb6361fc1f9f2650676589b479b3a31d)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_1_20_same_all.py	(date 1755452470278)
+@@ -1,104 +1,96 @@
++# ================= 程序 2 =================
+ import pandas as pd
+ import numpy as np
+-from sklearn.ensemble import RandomForestRegressor
+-from sklearn.model_selection import train_test_split
+-from sklearn.impute import SimpleImputer
+-from sklearn.preprocessing import StandardScaler
++import shap
+ import matplotlib.pyplot as plt
+ import seaborn as sns
+-import shap
++import pickle
++from sklearn.impute import SimpleImputer
++from sklearn.model_selection import train_test_split
+ 
+-# ========== Step 1: 读取数据 ==========
+-df = pd.read_csv(r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC.csv")
+-target_col = 'Average_Total_DOC_1'
++# ===== Step 1: 读取数据 & 模型 =====
++df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC_Environmental_analysis.csv"
++)
++target_col = 'Average_Total_DOC'
+ df = df.dropna(subset=[target_col])
+ 
+ # ========== Step 1.5: 筛选第一类流域（1–10 km²） ==========
+ df = df[(df['area_km2'] >= 1) & (df['area_km2'] <= 10)].copy()
+ 
+-drop_cols = ['Average_Total_DOC', 'Average_Total_DOC_Area_Unit', 'Annual_Increase_Rate_1', 'Annual_Increase_Rate_DOC_Area_Unit', 'Average_Total_DOC_Uncertainty', 'center_lon', 'COMID', 'Annual_Increase_Rate', 'Intercept', 'R_Value', 'P_Value', 'Std_Err', 'Num_same_COMID']
++drop_cols = [
++    'Average_Total_DOC_1', 'Annual_Increase_Rate',
++    'Annual_Increase_Rate_1', 'Annual_Increase_Rate_DOC_Area_Unit',
++    'perimeter'
++]
+ df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
+ 
+-X = df.drop(columns=[target_col])
++X = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
+ y = df[target_col]
+-X = X.select_dtypes(include=[np.number])
+-feature_names = X.columns
+ 
+-# ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========
+-selected_features = ["pf_disc", "soilt_12", "s_NDVI_mea", "frac_burn", "ocd_1_mean", "bdod_1_mea", "gravelius", "s_etot", "pf_spor", "terrain_14",
+-                     "lc_20", "bdod_6_mea", "ocs_mean", "s_TCW_mean", "t_2m_mean", "center_lat", "LS_mean", "terrain_5", "s_soiltem4", "bdod_5_mea"]  # ← 请把20个变量完整填在此处
+-X = X[[col for col in selected_features if col in X.columns]]
+-feature_names = X.columns.tolist()
+-
+-# ========== Step 2: 数据预处理 ==========
++X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+ imputer = SimpleImputer(strategy='mean')
+-X_imputed = imputer.fit_transform(X)
+-
+-scaler = StandardScaler()
+-X_scaled = scaler.fit_transform(X_imputed)
++X_test_imputed = imputer.fit_transform(X_test)
+ 
+-X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
++# ===== Step 2: 读取模型 =====
++with open(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\rf_global_model_best.pkl",
++    "rb"
++) as f:
++    rf = pickle.load(f)
+ 
+-# ========== Step 3: 训练模型 ==========
+-model = RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1)
+-model.fit(X_train, y_train)
++# ===== Step 3: 读取前 20 特征 =====
++top20_df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_RF.csv"
++)
++top_features = top20_df["Feature"].tolist()
++X_test_top20 = pd.DataFrame(X_test_imputed, columns=X.columns)[top_features]
+ 
+-# ========== Step 4: 特征重要性 ==========
+-importances = model.feature_importances_
++# ===== Step 4: SHAP 分析 =====
++explainer = shap.TreeExplainer(rf, feature_perturbation="tree_path_dependent")
++shap_vals = explainer.shap_values(X_test_top20, check_additivity=False, approximate=True)
+ 
+-top_n = 20
+-top_indices = np.argsort(importances)[::-1][:top_n]
+-top_features = np.array(feature_names)[top_indices]
+-top_importances = importances[top_indices]
++# 计算 SHAP 重要性
++shap_importances = np.abs(shap_vals).mean(axis=0)
++shap_directions = shap_vals.mean(axis=0)
++shap_percent = shap_importances / shap_importances.sum() * 100  # 百分比
+ 
+-# 相对这20个变量之和的比例（总和为1）
+-top_importance_sum = np.sum(top_importances)
+-top_relative_importances = top_importances / top_importance_sum
+-
+-# ========== Step 5: SHAP 值计算 ==========
+-explainer = shap.Explainer(model, X_train, feature_perturbation='interventional')
+-shap_values = explainer(X_train, approximate=True, check_additivity=False)
+-top_shap_values = shap_values[:, top_indices]
+-shap_means = np.abs(top_shap_values.values).mean(axis=0)
+-shap_directions = top_shap_values.values.mean(axis=0)
+-
+-# ========== Step 6: 构建结果表 ==========
++# 保存结果
+ result_df = pd.DataFrame({
+-    'Feature': top_features,
+-    'Relative_Importance': top_relative_importances,
+-    'SHAP_MeanAbs': shap_means,
+-    'SHAP_Mean': shap_directions,
+-    'SHAP_Direction': ['+' if val > 0 else '−' for val in shap_directions]
+-})
+-result_df = result_df.sort_values(by='Relative_Importance', ascending=False)
++    "Feature": top_features,
++    "SHAP_MeanAbs": shap_importances,
++    "SHAP_Mean": shap_directions,
++    "Importance(%)": shap_percent,
++    "SHAP_Direction": ["+" if v > 0 else "−" for v in shap_directions]
++}).sort_values(by="SHAP_MeanAbs", ascending=False)
+ 
+-# ========== Step 6.1: 保存 CSV ==========
+-output_path_csv = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Feature_Importance_class_1_same_all.csv"
+-result_df[['Feature', 'Relative_Importance']].to_csv(output_path_csv, index=False)
++result_df.to_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_SHAP_class_1.csv",
++    index=False
++)
+ 
+-# ========== Step 7: 绘图 ==========
++plt.rcParams["font.family"] = "Arial"
++plt.rcParams["font.size"] = 6
++
++# ===== Step 5: barplot 可视化 =====
+ positive_color = '#e66101'  # 橙色，代表正向 SHAP
+ negative_color = '#5e3c99'  # 紫蓝色，代表负向 SHAP
+-
+-plt.rcParams["font.family"] = "Arial"
+-plt.rcParams["font.size"] = 6
+-plt.figure(figsize=(8.4/2.54, 5/2.54), dpi=600)
+-
+ colors = [positive_color if val > 0 else negative_color for val in result_df['SHAP_Mean']]
+ 
++plt.figure(figsize=(8.4/2.54, 5/2.54), dpi=300)
+ sns.barplot(
+     y=result_df['Feature'],
+-    x=result_df['Relative_Importance'],
+-    palette=colors
++    x=result_df['Importance(%)'],
++    palette=colors,
++    dodge=False,
++    errorbar=None
+ )
+-
+ plt.grid(True, which='both', linestyle='--', alpha=0.5)
+-plt.xlabel('Relative Importance (Top 20 Features)')
++plt.xlabel('SHAP importance(%)')
+ plt.ylabel('')
+-
+ plt.tight_layout()
+-
+-# ========== Step 8: 保存图像 ==========
+-output_path_fig = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Feature_Importance_Class1_same_all.tif"
+-plt.savefig(output_path_fig, dpi=600, bbox_inches='tight', pad_inches=0.001, format='tiff')
+-plt.show()
++plt.savefig(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_SHAP_bar_class_1.tif",
++    dpi=300, bbox_inches='tight', pad_inches=0.001, format='tiff'
++)
++plt.close()
+\ No newline at end of file
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_1_20_Random_Forest_SHAP.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_1_20_Random_Forest_SHAP.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_1_20_Random_Forest_SHAP.py
+new file mode 100644
+--- /dev/null	(date 1753903919359)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_1_20_Random_Forest_SHAP.py	(date 1753903919359)
+@@ -0,0 +1,98 @@
++import pandas as pd
++import numpy as np
++from sklearn.ensemble import RandomForestRegressor
++from sklearn.model_selection import train_test_split
++from sklearn.impute import SimpleImputer
++from sklearn.preprocessing import StandardScaler
++import matplotlib.pyplot as plt
++import seaborn as sns
++import shap
++
++# ========== Step 1: 读取数据 ==========
++df = pd.read_csv(r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC.csv")
++target_col = 'Average_Total_DOC_1'
++df = df.dropna(subset=[target_col])
++
++# ========== Step 1.5: 筛选第一类流域（1–10 km²） ==========
++df = df[(df['area_km2'] >= 1) & (df['area_km2'] <= 10)].copy()
++
++drop_cols = ['Average_Total_DOC', 'Average_Total_DOC_Area_Unit', 'Annual_Increase_Rate_1', 'Annual_Increase_Rate_DOC_Area_Unit', 'Average_Total_DOC_Uncertainty', 'center_lon', 'COMID', 'Annual_Increase_Rate', 'Intercept', 'R_Value', 'P_Value', 'Std_Err', 'Num_same_COMID']
++df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
++
++X = df.drop(columns=[target_col])
++y = df[target_col]
++X = X.select_dtypes(include=[np.number])
++feature_names = X.columns
++
++# ========== Step 2: 数据预处理 ==========
++imputer = SimpleImputer(strategy='mean')
++X_imputed = imputer.fit_transform(X)
++
++scaler = StandardScaler()
++X_scaled = scaler.fit_transform(X_imputed)
++
++X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
++
++# ========== Step 3: 训练模型 ==========
++model = RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1)
++model.fit(X_train, y_train)
++
++# ========== Step 4: 特征重要性 ==========
++importances = model.feature_importances_
++
++top_n = 20
++top_indices = np.argsort(importances)[::-1][:top_n]
++top_features = feature_names[top_indices]
++top_importances = importances[top_indices]
++
++# 相对这20个变量之和的比例（总和为1）
++top_importance_sum = np.sum(top_importances)
++top_relative_importances = top_importances / top_importance_sum
++
++# ========== Step 5: SHAP 值计算 ==========
++explainer = shap.Explainer(model, X_train, feature_perturbation='interventional')
++shap_values = explainer(X_train, approximate=True)
++top_shap_values = shap_values[:, top_indices]
++shap_means = np.abs(top_shap_values.values).mean(axis=0)
++shap_directions = top_shap_values.values.mean(axis=0)
++
++# ========== Step 6: 构建结果表 ==========
++result_df = pd.DataFrame({
++    'Feature': top_features,
++    'Relative_Importance': top_relative_importances,
++    'SHAP_MeanAbs': shap_means,
++    'SHAP_Mean': shap_directions,
++    'SHAP_Direction': ['+' if val > 0 else '−' for val in shap_directions]
++})
++result_df = result_df.sort_values(by='Relative_Importance', ascending=False)
++
++# ========== Step 6.1: 保存 CSV ==========
++output_path_csv = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Feature_Importance_class_1.csv"
++result_df[['Feature', 'Relative_Importance']].to_csv(output_path_csv, index=False)
++
++# ========== Step 7: 绘图 ==========
++positive_color = '#e66101'  # 橙色，代表正向 SHAP
++negative_color = '#5e3c99'  # 紫蓝色，代表负向 SHAP
++
++plt.rcParams["font.family"] = "Arial"
++plt.rcParams["font.size"] = 6
++plt.figure(figsize=(8.4/2.54, 5/2.54), dpi=600)
++
++colors = [positive_color if val > 0 else negative_color for val in result_df['SHAP_Mean']]
++
++sns.barplot(
++    y=result_df['Feature'],
++    x=result_df['Relative_Importance'],
++    palette=colors
++)
++
++plt.grid(True, which='both', linestyle='--', alpha=0.5)
++plt.xlabel('Relative Importance (Top 20 Features)')
++plt.ylabel('')
++
++plt.tight_layout()
++
++# ========== Step 8: 保存图像 ==========
++output_path_fig = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Feature_Importance_Class1.tif"
++plt.savefig(output_path_fig, dpi=600, bbox_inches='tight', pad_inches=0.001, format='tiff')
++plt.show()
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_LightGBM.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_LightGBM.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_LightGBM.py
+new file mode 100644
+--- /dev/null	(date 1755627478136)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_LightGBM.py	(date 1755627478136)
+@@ -0,0 +1,95 @@
++import pandas as pd
++import numpy as np
++from sklearn.model_selection import train_test_split
++from sklearn.impute import SimpleImputer
++from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score
++import pickle
++from lightgbm import LGBMRegressor
++
++# ================= Step 1: 读取数据 =================
++df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC_analysis.csv"
++)
++target_col = 'Average_Total_DOC'
++df = df.dropna(subset=[target_col])
++
++# 删除不需要的列
++drop_cols = [
++     'Annual_Increase_Rate',  'Annual_Increase_Rate_1', 'Average_Total_DOC_Area_Unit',
++     'Average_Total_DOC_1', 'Annual_Increase_Rate_DOC_Area_Unit'
++]
++df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
++
++# 特征
++X = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
++
++# ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========
++"""
++selected_features = ["ocd_4_mean", "center_lat", "soc_6_mean", "bdod_1_mea", "soc_5_mean", "ocd_6_mean", "cslope_mea", "soc_3_mean", "ocd_5_mean", "soc_4_mean",
++                     "ocd_3_mean", "soc_2_mean", "total_prec", "cfvo_6_mea", "t_2m_mean", "bdod_3_mea", "LS_mean", "s_epot", "terrain_12", "slope"]  # ← 请把20个变量完整填在此处
++"""
++selected_features = ["pf_disc", "pf_spor", "terrain_5", "gravelius", "terrain_14", "LS_mean", "soilt_12", "lc_20", "s_etot", "t_2m_mean",
++                     "s_NDVI_mea", "s_TCW_mean", "frac_burn", "bdod_5_mea", "bdod_6_mea", "ocd_1_mean", "bdod_1_mea", "ocs_mean", "s_soiltem4", "center_lat"]  # ← 请把20个变量完整填在此处
++
++X = X[[col for col in selected_features if col in X.columns]]
++
++feature_names = X.columns
++y = df[target_col]
++
++# ================= Step 2: 数据预处理 =================
++X_train, X_test, y_train, y_test = train_test_split(
++    X, y, test_size=0.2, random_state=42
++)
++
++imputer = SimpleImputer(strategy='mean')
++X_train_imputed = imputer.fit_transform(X_train)
++X_test_imputed = imputer.transform(X_test)
++
++# ================= Step 3: 训练 LightGBM =================
++lgbm = LGBMRegressor(
++    n_estimators=5000,       # 树的数量
++    learning_rate=0.05,     # 学习率
++    max_depth=-1,           # -1 表示不限制深度
++    subsample=0.8,          # 子样本比例
++    colsample_bytree=0.8,   # 每棵树随机选择的特征比例
++    random_state=42,
++    n_jobs=-1
++)
++lgbm.fit(X_train_imputed, y_train)
++
++# 保存模型
++with open(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\lgbm_global_model_best.pkl",
++    "wb"
++) as f:
++    pickle.dump(lgbm, f)
++
++# ================= Step 4: 模型精度评估 =================
++y_pred = lgbm.predict(X_test_imputed)
++mae = mean_absolute_error(y_test, y_pred)
++rmse = root_mean_squared_error(y_test, y_pred)
++r2 = r2_score(y_test, y_pred)
++
++print("模型性能：")
++print(f"  R²(test)   = {r2:.4f}")
++print(f"  MAE        = {mae:.4f}")
++print(f"  RMSE       = {rmse:.4f}")
++
++# ================= Step 5: 特征重要性 (LGBM Importance) =================
++importances = lgbm.feature_importances_
++lgbm_importance_df = pd.DataFrame({
++    "Feature": feature_names,
++    "LGBM_Importance": importances
++})
++
++# 取前 20 个特征
++lgbm_importance_top20 = lgbm_importance_df.sort_values(by="LGBM_Importance", ascending=False).head(20).copy()
++
++# 添加 R²(test)
++lgbm_importance_top20["R2_test"] = r2
++
++# 保存到 CSV
++output_path = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_LGBM.csv"
++lgbm_importance_top20.to_csv(output_path, index=False)
++
++print(f"前20个LGBM重要特征及 R² 已保存到: {output_path}")
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_Random_Forest_SHAP.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_Random_Forest_SHAP.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_Random_Forest_SHAP.py
+new file mode 100644
+--- /dev/null	(date 1755466426330)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_Random_Forest_SHAP.py	(date 1755466426330)
+@@ -0,0 +1,92 @@
++# ================= 程序 2 =================
++import pandas as pd
++import numpy as np
++import shap
++import matplotlib.pyplot as plt
++import seaborn as sns
++import pickle
++from sklearn.impute import SimpleImputer
++from sklearn.model_selection import train_test_split
++
++# ===== Step 1: 读取数据 & 模型 =====
++df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC_analysis.csv"
++)
++target_col = 'Average_Total_DOC'
++df = df.dropna(subset=[target_col])
++
++drop_cols = [
++    'Annual_Increase_Rate',  'Annual_Increase_Rate_1', 'Average_Total_DOC_Area_Unit',
++     'Average_Total_DOC_1', 'Annual_Increase_Rate_DOC_Area_Unit'
++]
++df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
++
++X = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
++y = df[target_col]
++
++X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
++imputer = SimpleImputer(strategy='mean')
++X_test_imputed = imputer.fit_transform(X_test)
++
++# ===== Step 2: 读取模型 =====
++with open(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\rf_global_model_best.pkl",
++    "rb"
++) as f:
++    rf = pickle.load(f)
++
++# ===== Step 3: 读取前 20 特征 =====
++top20_df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_RF.csv"
++)
++top_features = top20_df["Feature"].tolist()
++X_test_top20 = pd.DataFrame(X_test_imputed, columns=X.columns)[top_features]
++
++# ===== Step 4: SHAP 分析 =====
++explainer = shap.TreeExplainer(rf, feature_perturbation="tree_path_dependent")
++shap_vals = explainer.shap_values(X_test_top20, check_additivity=False, approximate=True)
++
++# 计算 SHAP 重要性
++shap_importances = np.abs(shap_vals).mean(axis=0)
++shap_directions = shap_vals.mean(axis=0)
++shap_percent = shap_importances / shap_importances.sum() * 100  # 百分比
++
++# 保存结果
++result_df = pd.DataFrame({
++    "Feature": top_features,
++    "SHAP_MeanAbs": shap_importances,
++    "SHAP_Mean": shap_directions,
++    "Importance(%)": shap_percent,
++    "SHAP_Direction": ["+" if v > 0 else "−" for v in shap_directions]
++}).sort_values(by="SHAP_MeanAbs", ascending=False)
++
++result_df.to_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_SHAP.csv",
++    index=False
++)
++
++plt.rcParams["font.family"] = "Arial"
++plt.rcParams["font.size"] = 6
++
++# ===== Step 5: barplot 可视化 =====
++positive_color = '#e66101'  # 橙色，代表正向 SHAP
++negative_color = '#5e3c99'  # 紫蓝色，代表负向 SHAP
++colors = [positive_color if val > 0 else negative_color for val in result_df['SHAP_Mean']]
++
++plt.figure(figsize=(8.4/2.54, 5/2.54), dpi=300)
++sns.barplot(
++    y=result_df['Feature'],
++    x=result_df['Importance(%)'],
++    palette=colors,
++    dodge=False,
++    errorbar=None
++)
++plt.grid(True, which='both', linestyle='--', alpha=0.5)
++plt.xlabel('SHAP importance(%)')
++plt.ylabel('')
++plt.tight_layout()
++plt.savefig(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_SHAP_bar.tif",
++    dpi=300, bbox_inches='tight', pad_inches=0.001, format='tiff'
++)
++plt.close()
+\ No newline at end of file
+Index: CDOM_DOC_total_river_DOC_annual_Area_Unit_Lat_draw.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import pandas as pd\r\nimport matplotlib.pyplot as plt\r\nimport numpy as np\r\nfrom matplotlib.lines import Line2D\r\n\r\n# 文件路径\r\nfile_path = r\"D:\\UZH\\2024\\20240122 Nutrient and Organic Carbon references\\3_river_mouth_DOC\\DOC_update_20250203\\Total_DOC_average\\All_Properites.csv\"\r\noutput_path = r\"D:\\UZH\\2024\\20240122 Nutrient and Organic Carbon references\\3_river_mouth_DOC\\DOC_update_20250203\\Total_DOC_average\\ARCADE_MERIT_pan_Arctic_average_DOC_Area_vs_Latitude_log7class_colorbrewer_inside_legend.tif\"\r\n\r\n# 读取数据并清洗\r\ndf = pd.read_csv(file_path)\r\ndf = df.dropna(subset=['area_km2', 'Average_Total_DOC_Area_Unit', 'center_lat'])\r\ndf = df[df['Average_Total_DOC_Area_Unit'] > 0]\r\n\r\n# 设定流域面积的 5 个分类（对数分级）\r\nbins = [1, 10, 100, 1000, 100000, np.inf]\r\nlabels = [\r\n    \"$1 \\mathregular{-} 10$ km²\", \"$10 \\mathregular{-} 10^2$ km²\", \"$10^2 \\mathregular{-} 10^3$ km²\",\r\n    \"$10^3 \\mathregular{-} 10^5$ km²\", \"$>10^5$ km²\"]\r\ndf['area_class'] = pd.cut(df['area_km2'], bins=bins, labels=range(5), include_lowest=True)\r\n\r\n# 使用 ColorBrewer Set1 的 5 个颜色\r\ncolorbrewer_colors = [\"#ffffcc\", \"#a1dab4\", \"#41b6c4\", \"#2c7fb8\", \"#253494\"]\r\ncolors = colorbrewer_colors\r\n\r\n# 散点大小：按流域面积开方调整\r\nsizes = np.sqrt(df['area_km2']) * 0.1    # 缩放因子可根据实际需要微调\r\n\r\n# 创建图形\r\nfig, ax = plt.subplots(figsize=(19/2.54, 5/2.54), dpi=600)\r\nfont_kwargs = {'fontsize': 6, 'fontname': 'Arial'}\r\n\r\n# 分类绘图\r\nfor i in range(5):\r\n    subset = df[df['area_class'] == i]\r\n    ax.scatter(subset['center_lat'], subset['Average_Total_DOC_Area_Unit'],\r\n               s=sizes[subset.index], color=colors[i], alpha=0.7, edgecolors='none', label=labels[i])\r\n\r\n# 对数 Y 轴\r\nax.set_yscale('log')\r\n\r\n# 坐标轴与字体设置\r\nax.set_xlabel('Latitude (°N)', **font_kwargs)\r\nax.set_xlim(49, 84)\r\n# 设置 Y 轴范围和刻度间隔\r\nax.set_xticks(np.arange(49, 85, 1))\r\nax.set_ylabel('DOC flux per unit area\\n(Tg C km$^{-2}$)', **font_kwargs)\r\nax.tick_params(labelsize=6)\r\nfor label in ax.get_xticklabels() + ax.get_yticklabels():\r\n    label.set_fontname('Arial')\r\n\r\n# 构建 legend 元素，限制最小 marker size 防止太小\r\nlegend_sizes = [np.mean(sizes[df['area_class'] == i]) for i in range(5)]\r\nmin_marker_size = 4  # 最小 marker radius（单位：points）\r\n\r\nlegend_elements = [\r\n    Line2D(\r\n        [0], [0],\r\n        marker='o',\r\n        color='none',\r\n        label=labels[i],\r\n        markerfacecolor=colors[i],\r\n        markeredgewidth=0,\r\n        markersize=max(np.sqrt(legend_sizes[i]), min_marker_size)  # 半径开方后做最小限制\r\n    )\r\n    for i in range(5)\r\n]\r\n\r\n# 构造伪“标题”图例元素\r\ntitle_element = Line2D(\r\n    [0], [0],\r\n    marker='',\r\n    color='none',\r\n    label='Catchment Area (km²)'\r\n)\r\n\r\n# 将标题放在 legend_elements 最前面\r\nlegend_elements_with_title = [title_element] + legend_elements\r\n\r\n# 横向放置图例于下方，手动模拟标题放左边\r\nlegend = ax.legend(\r\n    handles=legend_elements_with_title,\r\n    prop={'size': 6, 'family': 'Arial'},\r\n    loc='upper center',\r\n    bbox_to_anchor=(0.45, -0.25),\r\n    ncol=8,\r\n    frameon=True,\r\n    facecolor='0.9',     # 10% 灰度背景\r\n    edgecolor='none',    # 边框透明\r\n    borderpad=0.4,\r\n    labelspacing=0.5,\r\n    handletextpad=0.5,\r\n    columnspacing=0.8\r\n)\r\n\r\n# 设置标题样式（即第一个文本元素）\r\nlegend.get_texts()[0].set_fontname('Arial')\r\nlegend.get_texts()[0].set_fontsize(6)\r\n\r\n\r\n# 添加网格\r\nax.grid(True, which='both', linestyle='--', alpha=0.5)\r\n\r\n# 保存图像\r\nplt.tight_layout()\r\nplt.savefig(output_path, dpi=600 , bbox_inches='tight', pad_inches=0.01)\r\nplt.show()
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_Area_Unit_Lat_draw.py b/CDOM_DOC_total_river_DOC_annual_Area_Unit_Lat_draw.py
+--- a/CDOM_DOC_total_river_DOC_annual_Area_Unit_Lat_draw.py	(revision babff9c9eb6361fc1f9f2650676589b479b3a31d)
++++ b/CDOM_DOC_total_river_DOC_annual_Area_Unit_Lat_draw.py	(date 1754677496020)
+@@ -24,10 +24,10 @@
+ colors = colorbrewer_colors
+ 
+ # 散点大小：按流域面积开方调整
+-sizes = np.sqrt(df['area_km2']) * 0.1    # 缩放因子可根据实际需要微调
++sizes = np.sqrt(df['area_km2']) * 0.04    # 缩放因子可根据实际需要微调
+ 
+ # 创建图形
+-fig, ax = plt.subplots(figsize=(19/2.54, 5/2.54), dpi=600)
++fig, ax = plt.subplots(figsize=(16.9/2.54, 5/2.54), dpi=600)
+ font_kwargs = {'fontsize': 6, 'fontname': 'Arial'}
+ 
+ # 分类绘图
+@@ -43,7 +43,7 @@
+ ax.set_xlabel('Latitude (°N)', **font_kwargs)
+ ax.set_xlim(49, 84)
+ # 设置 Y 轴范围和刻度间隔
+-ax.set_xticks(np.arange(49, 85, 1))
++ax.set_xticks(np.arange(49, 84, 1))
+ ax.set_ylabel('DOC flux per unit area\n(Tg C km$^{-2}$)', **font_kwargs)
+ ax.tick_params(labelsize=6)
+ for label in ax.get_xticklabels() + ax.get_yticklabels():
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_1_20_Random_Forest.py
+rename from CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20.py
+rename to CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_1_20_Random_Forest.py
+--- a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20.py	(revision babff9c9eb6361fc1f9f2650676589b479b3a31d)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_class_1_20_Random_Forest.py	(date 1755508859294)
+@@ -3,93 +3,88 @@
+ from sklearn.ensemble import RandomForestRegressor
+ from sklearn.model_selection import train_test_split
+ from sklearn.impute import SimpleImputer
+-from sklearn.preprocessing import StandardScaler
+-import matplotlib.pyplot as plt
+-import seaborn as sns
++from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score
+ import shap
++import pickle
+ 
+-# ========== Step 1: 读取数据 ==========
+-df = pd.read_csv(r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC.csv")
+-target_col = 'Average_Total_DOC_1'
++# ================= Step 1: 读取数据 =================
++df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC_analysis.csv"
++)
++target_col = 'Average_Total_DOC'
+ df = df.dropna(subset=[target_col])
++# ========== Step 1.5: 筛选第一类流域（1–10 km²） ==========
++df = df[(df['area_km2'] >= 1) & (df['area_km2'] <= 10)].copy()
+ 
+-drop_cols = ['Average_Total_DOC', 'Average_Total_DOC_Area_Unit', 'Annual_Increase_Rate_1', 'Annual_Increase_Rate_DOC_Area_Unit', 'Average_Total_DOC_Uncertainty', 'center_lon', 'COMID', 'Annual_Increase_Rate', 'Intercept', 'R_Value', 'P_Value', 'Std_Err', 'Num_same_COMID']
++# 删除不需要的列
++drop_cols = [
++     'Annual_Increase_Rate',  'Annual_Increase_Rate_1', 'Average_Total_DOC_Area_Unit',
++     'Average_Total_DOC_1', 'Annual_Increase_Rate_DOC_Area_Unit'
++]
+ df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
+ 
+-X = df.drop(columns=[target_col])
+-y = df[target_col]
+-X = X.select_dtypes(include=[np.number])
++# 特征
++X = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
++
++# ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========
++selected_features = ["ocd_4_mean", "center_lat", "soc_6_mean", "bdod_1_mea", "soc_5_mean", "ocd_6_mean", "cslope_mea", "soc_3_mean", "ocd_5_mean", "soc_4_mean",
++                     "ocd_3_mean", "soc_2_mean", "total_prec", "cfvo_6_mea", "t_2m_mean", "bdod_3_mea", "LS_mean", "s_epot", "terrain_12", "slope"]  # ← 请把20个变量完整填在此处
++X = X[[col for col in selected_features if col in X.columns]]
+ feature_names = X.columns
++y = df[target_col]
+ 
+-# ========== Step 2: 数据预处理 ==========
++# ================= Step 2: 数据预处理 =================
++X_train, X_test, y_train, y_test = train_test_split(
++    X, y, test_size=0.2, random_state=42
++)
++
+ imputer = SimpleImputer(strategy='mean')
+-X_imputed = imputer.fit_transform(X)
+-
+-scaler = StandardScaler()
+-X_scaled = scaler.fit_transform(X_imputed)
++X_train_imputed = imputer.fit_transform(X_train)
++X_test_imputed = imputer.transform(X_test)
+ 
+-X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
++# ================= Step 3: 训练随机森林 =================
++rf = RandomForestRegressor(
++    n_estimators=200,      # 增加树数量，提升稳定性
++    random_state=42,
++    n_jobs=-1,
++    oob_score=True,
++    max_features='sqrt'
++)
++rf.fit(X_train_imputed, y_train)
+ 
+-# ========== Step 3: 训练模型 ==========
+-model = RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1)
+-model.fit(X_train, y_train)
++# 保存模型
++with open(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\rf_global_model_best_class_1.pkl",
++    "wb"
++) as f:
++    pickle.dump(rf, f)
+ 
+-# ========== Step 4: 特征重要性 ==========
+-importances = model.feature_importances_
++# ================= Step 4: 模型精度评估 =================
++y_pred = rf.predict(X_test_imputed)
++mae = mean_absolute_error(y_test, y_pred)
++rmse = root_mean_squared_error(y_test, y_pred)
++r2 = r2_score(y_test, y_pred)
+ 
+-top_n = 20
+-top_indices = np.argsort(importances)[::-1][:top_n]
+-top_features = feature_names[top_indices]
+-top_importances = importances[top_indices]
++print("模型性能：")
++print(f"  R²(test)   = {r2:.4f}")
++print(f"  R²(OOB)    = {rf.oob_score_:.4f}")
+ 
+-# 相对这20个变量之和的比例（总和为1）
+-top_importance_sum = np.sum(top_importances)
+-top_relative_importances = top_importances / top_importance_sum
+-
+-# ========== Step 5: SHAP 值计算 ==========
+-explainer = shap.Explainer(model, X_train, feature_perturbation='interventional')
+-shap_values = explainer(X_train, approximate=True)
+-top_shap_values = shap_values[:, top_indices]
+-shap_means = np.abs(top_shap_values.values).mean(axis=0)
+-shap_directions = top_shap_values.values.mean(axis=0)
+-
+-# ========== Step 6: 构建结果表 ==========
+-result_df = pd.DataFrame({
+-    'Feature': top_features,
+-    'Relative_Importance': top_relative_importances,
+-    'SHAP_MeanAbs': shap_means,
+-    'SHAP_Mean': shap_directions,
+-    'SHAP_Direction': ['+' if val > 0 else '−' for val in shap_directions]
++# ================= Step 5: 特征重要性 (RF Importance) =================
++importances = rf.feature_importances_
++rf_importance_df = pd.DataFrame({
++    "Feature": feature_names,
++    "RF_Importance": importances
+ })
+-result_df = result_df.sort_values(by='Relative_Importance', ascending=False)
+ 
+-# ========== Step 6.1: 保存 CSV ==========
+-output_path_csv = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Feature_Importance.csv"
+-result_df[['Feature', 'Relative_Importance']].to_csv(output_path_csv, index=False)
++# 取前 20 个特征
++rf_importance_top20 = rf_importance_df.sort_values(by="RF_Importance", ascending=False).head(20).copy()
+ 
+-# ========== Step 7: 绘图 ==========
+-positive_color = '#e66101'  # 橙色，代表正向 SHAP
+-negative_color = '#5e3c99'  # 紫蓝色，代表负向 SHAP
++# 添加 R²(test) 和 R²(OOB) 两列（相同的值写在每一行）
++rf_importance_top20["R2_test"] = r2
++rf_importance_top20["R2_OOB"] = rf.oob_score_
+ 
+-plt.rcParams["font.family"] = "Arial"
+-plt.rcParams["font.size"] = 6
+-plt.figure(figsize=(8.4/2.54, 5/2.54), dpi=600)
++# 保存到 CSV
++output_path = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_RF_class_1.csv"
++rf_importance_top20.to_csv(output_path, index=False)
+ 
+-colors = [positive_color if val > 0 else negative_color for val in result_df['SHAP_Mean']]
+-
+-sns.barplot(
+-    y=result_df['Feature'],
+-    x=result_df['Relative_Importance'],
+-    palette=colors
+-)
+-
+-plt.grid(True, which='both', linestyle='--', alpha=0.5)
+-plt.xlabel('Relative Importance (Top 20 Features)')
+-plt.ylabel('')
+-
+-plt.tight_layout()
+-
+-# ========== Step 8: 保存图像 ==========
+-output_path_fig = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Feature_Importance.tif"
+-plt.savefig(output_path_fig, dpi=600, bbox_inches='tight', pad_inches=0.001, format='tiff')
+-plt.show()
++print(f"前20个RF重要特征及 R² 已保存到: {output_path}")
+\ No newline at end of file
+Index: CDOM_DOC_total_river_DOC_annual_Area_Unit_Lat_mean_5class_hist.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_Area_Unit_Lat_mean_5class_hist.py b/CDOM_DOC_total_river_DOC_annual_Area_Unit_Lat_mean_5class_hist.py
+new file mode 100644
+--- /dev/null	(date 1754679395530)
++++ b/CDOM_DOC_total_river_DOC_annual_Area_Unit_Lat_mean_5class_hist.py	(date 1754679395530)
+@@ -0,0 +1,82 @@
++import pandas as pd
++import numpy as np
++import matplotlib.pyplot as plt
++import os
++import matplotlib.ticker as mticker
++
++# 设置字体
++plt.rcParams["font.family"] = "Arial"
++
++# 文件路径设置
++input_file = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC.csv"
++output_dir = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average"
++output_bar_fig = os.path.join(output_dir, "mean_5class_histogram.tif")
++
++# 读取数据
++df = pd.read_csv(input_file)
++
++# 单位转换 Tg C/yr
++df['Average_Total_DOC_Area_Unit'] = df['Average_Total_DOC_Area_Unit'] / 1e0
++
++# 去除缺失值，仅保留正增长数据
++df = df.dropna(subset=['area_km2', 'Average_Total_DOC_Area_Unit'])
++df_pos = df[df['Average_Total_DOC_Area_Unit'] > 0].copy()
++
++# 分组
++bins = [1, 10, 100, 1000, 100000, np.inf]
++labels = ['1–10', '10–100', '100–1000', '1000–100000', '>100000']
++df_pos['area_class'] = pd.cut(df_pos['area_km2'], bins=bins, labels=labels, right=False)
++
++# 计算每组的平均增长率
++grouped = df_pos.groupby('area_class', observed=True)['Average_Total_DOC_Area_Unit'].mean().reset_index()
++
++# 为直方图设置 X 轴数字标签（1–5）
++grouped['group_index'] = range(1, len(grouped) + 1)
++
++# 调色板
++colors = ["#ffffcc", "#a1dab4", "#41b6c4", "#2c7fb8", "#253494"]
++
++# 绘图
++fig, ax = plt.subplots(figsize=(4/2.54, 2/2.54), dpi=600)  # 大小为 6cm x 4cm
++
++bars = ax.bar(
++    grouped['group_index'],
++    grouped['Average_Total_DOC_Area_Unit'],
++    color=colors,
++    width=0.6
++)
++
++# 设置坐标轴和标签
++ax.set_xticklabels([])  # 隐藏横轴坐标标签（1, 2, 3, 4, 5）
++ax.set_ylabel("Mean", fontsize=6)
++ax.tick_params(axis='y', labelsize=6)
++ax.tick_params(axis='x', labelsize=6)
++
++ax.set_yscale('log')
++# 设置手动刻度
++yticks = [1e-8, 1e-7, 1e-6, 1e-5,  1e-4, 1e-3]
++yticklabels = [r'$10^{-8}$', r'$10^{-7}$', r'$10^{-6}$', r'$10^{-5}$', r'$10^{-4}$', r'$10^{-3}$']
++
++ax.set_yticks(yticks)
++ax.set_yticklabels(yticklabels, fontsize=6, fontname='Arial')
++
++
++# 添加数值标签（竖向显示）
++for bar in bars:
++    height = bar.get_height()
++    ax.annotate(f'{height:.2e}',
++                xy=(bar.get_x() + bar.get_width() / 2, 1e-7),
++                xytext=(0, 5),
++                textcoords="offset points",
++                ha='center',
++                va='bottom',
++                fontsize=5,
++                rotation=90)  # 设置竖向显示
++
++# 去除边框顶部和右侧
++ax.spines['top'].set_visible(False)
++ax.spines['right'].set_visible(False)
++
++plt.tight_layout()
++plt.savefig(output_bar_fig, dpi=600, bbox_inches='tight', format='tiff', transparent=True)
++plt.close()
+\ No newline at end of file
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_class_2.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_class_2.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_class_2.py
+new file mode 100644
+--- /dev/null	(date 1755618331176)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_class_2.py	(date 1755618331176)
+@@ -0,0 +1,95 @@
++import pandas as pd
++import numpy as np
++from sklearn.model_selection import train_test_split
++from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score
++import pickle
++from catboost import CatBoostRegressor
++
++# ================= Step 1: 读取数据 =================
++df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC_analysis.csv"
++)
++target_col = 'Average_Total_DOC'
++df = df.dropna(subset=[target_col])
++
++# 删除不需要的列
++drop_cols = [
++    'Annual_Increase_Rate', 'Annual_Increase_Rate_1', 'Average_Total_DOC_Area_Unit',
++    'Average_Total_DOC_1', 'Annual_Increase_Rate_DOC_Area_Unit'
++]
++df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
++# ========== Step 1.5: 筛选第一类流域（1–10 km²） ==========
++df = df[(df['area_km2'] >= 10) & (df['area_km2'] <= 100)].copy()
++# 特征
++X = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
++
++# ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========
++"""
++selected_features = ["ocd_4_mean", "center_lat", "soc_6_mean", "bdod_1_mea", "soc_5_mean", "ocd_6_mean", "cslope_mea", "soc_3_mean", "ocd_5_mean", "soc_4_mean",
++                     "ocd_3_mean", "soc_2_mean", "total_prec", "cfvo_6_mea", "t_2m_mean", "bdod_3_mea", "LS_mean", "s_epot", "terrain_12", "slope"]  # ← 请把20个变量完整填在此处
++"""
++selected_features = ["pf_disc", "pf_spor", "terrain_5", "gravelius", "terrain_14", "LS_mean", "soilt_12", "lc_20", "s_etot", "t_2m_mean",
++                     "s_NDVI_mea", "s_TCW_mean", "frac_burn", "bdod_5_mea", "bdod_6_mea", "ocd_1_mean", "bdod_1_mea", "ocs_mean", "s_soiltem4", "center_lat"]  # ← 请把20个变量完整填在此处
++
++X = X[[col for col in selected_features if col in X.columns]]
++
++feature_names = X.columns
++y = df[target_col]
++
++# ================= Step 2: 数据预处理 =================
++X_train, X_test, y_train, y_test = train_test_split(
++    X, y, test_size=0.2, random_state=42
++)
++
++X_train_imputed = X_train
++X_test_imputed = X_test
++
++# ================= Step 3: 训练 CatBoost =================
++cat_model = CatBoostRegressor(
++    iterations=10000,           # 总迭代次数（树数）
++    learning_rate=0.05,         # ← 调高学习率，收敛更快
++    depth=10,                   # 树的深度，控制模型复杂度
++    l2_leaf_reg=20,             # L2 正则化系数
++    subsample=0.8,              # 每次采样 80% 的数据，防止过拟合
++    random_seed=42,             # 随机种子，保证可复现
++    verbose=500,                # 每500轮输出一次日志
++    early_stopping_rounds=300   # 如果300轮没提升，提前停止
++)
++cat_model.fit(X_train_imputed, y_train)
++
++# 保存模型
++with open(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\catboost_global_model_best_class_2.pkl",
++    "wb"
++) as f:
++    pickle.dump(cat_model, f)
++
++# ================= Step 4: 模型精度评估 =================
++y_pred = cat_model.predict(X_test_imputed)
++mae = mean_absolute_error(y_test, y_pred)
++rmse = root_mean_squared_error(y_test, y_pred)
++r2 = r2_score(y_test, y_pred)
++
++print("模型性能：")
++print(f"  R²(test)   = {r2:.4f}")
++print(f"  MAE        = {mae:.4f}")
++print(f"  RMSE       = {rmse:.4f}")
++
++# ================= Step 5: 特征重要性 (CatBoost Importance) =================
++importances = cat_model.feature_importances_
++cat_importance_df = pd.DataFrame({
++    "Feature": feature_names,
++    "CatBoost_Importance": importances
++})
++
++# 取前 20 个特征
++cat_importance_top20 = cat_importance_df.sort_values(by="CatBoost_Importance", ascending=False).head(20).copy()
++
++# 添加 R²(test)
++cat_importance_top20["R2_test"] = r2
++
++# 保存到 CSV
++output_path = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_CatBoost_class_2.csv"
++cat_importance_top20.to_csv(output_path, index=False)
++
++print(f"前20个CatBoost重要特征及 R² 已保存到: {output_path}")
+\ No newline at end of file
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_SHAP.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_SHAP.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_SHAP.py
+new file mode 100644
+--- /dev/null	(date 1755628598555)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_SHAP.py	(date 1755628598555)
+@@ -0,0 +1,104 @@
++# ================= 程序 2 =================
++import pandas as pd
++import numpy as np
++import shap
++import matplotlib.pyplot as plt
++import seaborn as sns
++import pickle
++from sklearn.impute import SimpleImputer
++from sklearn.model_selection import train_test_split
++
++# ===== Step 1: 读取数据 & 模型 =====
++df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC_analysis.csv"
++)
++target_col = 'Average_Total_DOC'
++df = df.dropna(subset=[target_col])
++
++# 删除不需要的列
++drop_cols = [
++    'Annual_Increase_Rate', 'Annual_Increase_Rate_1', 'Average_Total_DOC_Area_Unit',
++    'Average_Total_DOC_1', 'Annual_Increase_Rate_DOC_Area_Unit'
++]
++df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
++X = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
++# ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========
++selected_features = ["pf_disc", "pf_spor", "terrain_5", "gravelius", "terrain_14", "LS_mean", "soilt_12", "lc_20", "s_etot", "t_2m_mean",
++                     "s_NDVI_mea", "s_TCW_mean", "frac_burn", "bdod_5_mea", "bdod_6_mea", "ocd_1_mean", "bdod_1_mea", "ocs_mean", "s_soiltem4", "center_lat"]  # ← 请把20个变量完整填在此处
++
++X = X[[col for col in selected_features if col in X.columns]]
++
++feature_names = X.columns
++
++y = df[target_col]
++
++X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
++imputer = SimpleImputer(strategy='mean')
++X_test_imputed = imputer.fit_transform(X_test)
++
++# ===== Step 2: 读取模型 =====
++with open(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\xgb_global_model_best.pkl",
++    "rb"
++) as f:
++    rf = pickle.load(f)
++
++# ===== Step 3: 读取前 20 特征 =====
++top20_df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_XGB.csv"
++)
++top_features = top20_df["Feature"].tolist()
++X_test_top20 = pd.DataFrame(X_test_imputed, columns=X.columns)[top_features]
++
++# ===== Step 4: SHAP 分析 =====
++explainer = shap.TreeExplainer(rf, feature_perturbation="tree_path_dependent")
++# 为了加速，可以只取测试集的一部分样本
++X_shap = shap.sample(X_test_top20, 1000, random_state=42)
++
++# 计算 SHAP 值（CatBoost 不支持 approximate=True）
++shap_vals = explainer.shap_values(X_shap, check_additivity=False)
++
++# 计算 SHAP 重要性
++shap_importances = np.abs(shap_vals).mean(axis=0)
++shap_directions = shap_vals.mean(axis=0)
++shap_percent = shap_importances / shap_importances.sum() * 100  # 百分比
++
++# 保存结果
++result_df = pd.DataFrame({
++    "Feature": top_features,
++    "SHAP_MeanAbs": shap_importances,
++    "SHAP_Mean": shap_directions,
++    "Importance(%)": shap_percent,
++    "SHAP_Direction": ["+" if v > 0 else "−" for v in shap_directions]
++}).sort_values(by="SHAP_MeanAbs", ascending=False)
++
++result_df.to_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_SHAP.csv",
++    index=False
++)
++
++plt.rcParams["font.family"] = "Arial"
++plt.rcParams["font.size"] = 6
++
++# ===== Step 5: barplot 可视化 =====
++positive_color = '#e66101'  # 橙色，代表正向 SHAP
++negative_color = '#5e3c99'  # 紫蓝色，代表负向 SHAP
++colors = [positive_color if val > 0 else negative_color for val in result_df['SHAP_Mean']]
++
++plt.figure(figsize=(8.4/2.54, 5/2.54), dpi=300)
++sns.barplot(
++    y=result_df['Feature'],
++    x=result_df['Importance(%)'],
++    palette=colors,
++    dodge=False,
++    errorbar=None
++)
++plt.grid(True, which='both', linestyle='--', alpha=0.5)
++plt.xlabel('SHAP importance(%)')
++plt.ylabel('')
++plt.tight_layout()
++plt.savefig(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_SHAP_bar.tif",
++    dpi=300, bbox_inches='tight', pad_inches=0.001, format='tiff'
++)
++plt.close()
+\ No newline at end of file
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_Random_Forest.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_Random_Forest.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_Random_Forest.py
+new file mode 100644
+--- /dev/null	(date 1755628305306)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_Random_Forest.py	(date 1755628305306)
+@@ -0,0 +1,94 @@
++import pandas as pd
++import numpy as np
++from sklearn.ensemble import RandomForestRegressor
++from sklearn.model_selection import train_test_split
++from sklearn.impute import SimpleImputer
++from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score
++import pickle
++
++# ================= Step 1: 读取数据 =================
++df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC_analysis.csv"
++)
++target_col = 'Average_Total_DOC'
++df = df.dropna(subset=[target_col])
++
++# 删除不需要的列
++drop_cols = [
++     'Annual_Increase_Rate',  'Annual_Increase_Rate_1', 'Average_Total_DOC_Area_Unit',
++     'Average_Total_DOC_1', 'Annual_Increase_Rate_DOC_Area_Unit'
++]
++df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
++
++# 特征
++X = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
++
++# ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========
++"""
++selected_features = ["ocd_4_mean", "center_lat", "soc_6_mean", "bdod_1_mea", "soc_5_mean", "ocd_6_mean", "cslope_mea", "soc_3_mean", "ocd_5_mean", "soc_4_mean",
++                     "ocd_3_mean", "soc_2_mean", "total_prec", "cfvo_6_mea", "t_2m_mean", "bdod_3_mea", "LS_mean", "s_epot", "terrain_12", "slope"]  # ← 请把20个变量完整填在此处
++"""
++selected_features = ["pf_disc", "pf_spor", "terrain_5", "gravelius", "terrain_14", "LS_mean", "soilt_12", "lc_20", "s_etot", "t_2m_mean",
++                     "s_NDVI_mea", "s_TCW_mean", "frac_burn", "bdod_5_mea", "bdod_6_mea", "ocd_1_mean", "bdod_1_mea", "ocs_mean", "s_soiltem4", "center_lat"]  # ← 请把20个变量完整填在此处
++
++X = X[[col for col in selected_features if col in X.columns]]
++
++feature_names = X.columns
++
++y = df[target_col]
++
++# ================= Step 2: 数据预处理 =================
++X_train, X_test, y_train, y_test = train_test_split(
++    X, y, test_size=0.2, random_state=42
++)
++
++imputer = SimpleImputer(strategy='mean')
++X_train_imputed = imputer.fit_transform(X_train)
++X_test_imputed = imputer.transform(X_test)
++
++# ================= Step 3: 训练随机森林 =================
++rf = RandomForestRegressor(
++    n_estimators=2000,      # 增加树数量，提升稳定性
++    random_state=42,
++    n_jobs=-1,
++    oob_score=True,
++    max_features='sqrt'
++)
++rf.fit(X_train_imputed, y_train)
++
++# 保存模型
++with open(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\rf_global_model_best.pkl",
++    "wb"
++) as f:
++    pickle.dump(rf, f)
++
++# ================= Step 4: 模型精度评估 =================
++y_pred = rf.predict(X_test_imputed)
++mae = mean_absolute_error(y_test, y_pred)
++rmse = root_mean_squared_error(y_test, y_pred)
++r2 = r2_score(y_test, y_pred)
++
++print("模型性能：")
++print(f"  R²(test)   = {r2:.4f}")
++print(f"  R²(OOB)    = {rf.oob_score_:.4f}")
++
++# ================= Step 5: 特征重要性 (RF Importance) =================
++importances = rf.feature_importances_
++rf_importance_df = pd.DataFrame({
++    "Feature": feature_names,
++    "RF_Importance": importances
++})
++
++# 取前 20 个特征
++rf_importance_top20 = rf_importance_df.sort_values(by="RF_Importance", ascending=False).head(20).copy()
++
++# 添加 R²(test) 和 R²(OOB) 两列（相同的值写在每一行）
++rf_importance_top20["R2_test"] = r2
++rf_importance_top20["R2_OOB"] = rf.oob_score_
++
++# 保存到 CSV
++output_path = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_RF.csv"
++rf_importance_top20.to_csv(output_path, index=False)
++
++print(f"前20个RF重要特征及 R² 已保存到: {output_path}")
+\ No newline at end of file
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_SHAP_class_2.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_SHAP_class_2.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_SHAP_class_2.py
+new file mode 100644
+--- /dev/null	(date 1755618331149)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_SHAP_class_2.py	(date 1755618331149)
+@@ -0,0 +1,108 @@
++# ================= 程序 2 =================
++import pandas as pd
++import numpy as np
++import shap
++import matplotlib.pyplot as plt
++import seaborn as sns
++import pickle
++from sklearn.impute import SimpleImputer
++from sklearn.model_selection import train_test_split
++
++# ===== Step 1: 读取数据 & 模型 =====
++df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC_analysis.csv"
++)
++target_col = 'Average_Total_DOC'
++df = df.dropna(subset=[target_col])
++
++# 删除不需要的列
++drop_cols = [
++    'Annual_Increase_Rate', 'Annual_Increase_Rate_1', 'Average_Total_DOC_Area_Unit',
++    'Average_Total_DOC_1', 'Annual_Increase_Rate_DOC_Area_Unit'
++]
++df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
++
++# ========== Step 1.5: 筛选第一类流域（1–10 km²） ==========
++df = df[(df['area_km2'] >= 10) & (df['area_km2'] <= 100)].copy()
++
++X = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
++# ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========
++selected_features = ["pf_disc", "pf_spor", "terrain_5", "gravelius", "terrain_14", "LS_mean", "soilt_12", "lc_20", "s_etot", "t_2m_mean",
++                     "s_NDVI_mea", "s_TCW_mean", "frac_burn", "bdod_5_mea", "bdod_6_mea", "ocd_1_mean", "bdod_1_mea", "ocs_mean", "s_soiltem4", "center_lat"]  # ← 请把20个变量完整填在此处
++
++X = X[[col for col in selected_features if col in X.columns]]
++
++feature_names = X.columns
++
++y = df[target_col]
++
++X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
++imputer = SimpleImputer(strategy='mean')
++X_test_imputed = imputer.fit_transform(X_test)
++
++# ===== Step 2: 读取模型 =====
++with open(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\catboost_global_model_best_class_2.pkl",
++    "rb"
++) as f:
++    rf = pickle.load(f)
++
++# ===== Step 3: 读取前 20 特征 =====
++top20_df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_CatBoost_class_2.csv"
++)
++top_features = top20_df["Feature"].tolist()
++X_test_top20 = pd.DataFrame(X_test_imputed, columns=X.columns)[top_features]
++
++# ===== Step 4: SHAP 分析 =====
++explainer = shap.TreeExplainer(rf, feature_perturbation="tree_path_dependent")
++# 为了加速，可以只取测试集的一部分样本
++X_shap = shap.sample(X_test_top20, 1000, random_state=42)
++
++# 计算 SHAP 值（CatBoost 不支持 approximate=True）
++shap_vals = explainer.shap_values(X_shap, check_additivity=False)
++
++# 计算 SHAP 重要性
++shap_importances = np.abs(shap_vals).mean(axis=0)
++shap_directions = shap_vals.mean(axis=0)
++shap_percent = shap_importances / shap_importances.sum() * 100  # 百分比
++
++# 保存结果
++result_df = pd.DataFrame({
++    "Feature": top_features,
++    "SHAP_MeanAbs": shap_importances,
++    "SHAP_Mean": shap_directions,
++    "Importance(%)": shap_percent,
++    "SHAP_Direction": ["+" if v > 0 else "−" for v in shap_directions]
++}).sort_values(by="SHAP_MeanAbs", ascending=False)
++
++result_df.to_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_SHAP_class_2.csv",
++    index=False
++)
++
++plt.rcParams["font.family"] = "Arial"
++plt.rcParams["font.size"] = 6
++
++# ===== Step 5: barplot 可视化 =====
++positive_color = '#e66101'  # 橙色，代表正向 SHAP
++negative_color = '#5e3c99'  # 紫蓝色，代表负向 SHAP
++colors = [positive_color if val > 0 else negative_color for val in result_df['SHAP_Mean']]
++
++plt.figure(figsize=(8.4/2.54, 5/2.54), dpi=300)
++sns.barplot(
++    y=result_df['Feature'],
++    x=result_df['Importance(%)'],
++    palette=colors,
++    dodge=False,
++    errorbar=None
++)
++plt.grid(True, which='both', linestyle='--', alpha=0.5)
++plt.xlabel('SHAP importance(%)')
++plt.ylabel('')
++plt.tight_layout()
++plt.savefig(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_SHAP_bar_class_2.tif",
++    dpi=300, bbox_inches='tight', pad_inches=0.001, format='tiff'
++)
++plt.close()
+\ No newline at end of file
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_SHAP_class_1.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_SHAP_class_1.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_SHAP_class_1.py
+new file mode 100644
+--- /dev/null	(date 1755631025753)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_SHAP_class_1.py	(date 1755631025753)
+@@ -0,0 +1,107 @@
++# ================= 程序 2 =================
++import pandas as pd
++import numpy as np
++import shap
++import matplotlib.pyplot as plt
++import seaborn as sns
++import pickle
++from sklearn.impute import SimpleImputer
++from sklearn.model_selection import train_test_split
++
++# ===== Step 1: 读取数据 & 模型 =====
++df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC_analysis.csv"
++)
++target_col = 'Average_Total_DOC'
++df = df.dropna(subset=[target_col])
++
++# 删除不需要的列
++drop_cols = [
++    'Annual_Increase_Rate', 'Annual_Increase_Rate_1', 'Average_Total_DOC_Area_Unit',
++    'Average_Total_DOC_1', 'Annual_Increase_Rate_DOC_Area_Unit'
++]
++df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
++# ========== Step 1.5: 筛选第一类流域（1–10 km²） ==========
++df = df[(df['area_km2'] >= 1) & (df['area_km2'] <= 10)].copy()
++
++X = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
++# ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========
++selected_features = ["pf_disc", "pf_spor", "terrain_5", "gravelius", "terrain_14", "LS_mean", "soilt_12", "lc_20", "s_etot", "t_2m_mean",
++                     "s_NDVI_mea", "s_TCW_mean", "frac_burn", "bdod_5_mea", "bdod_6_mea", "ocd_1_mean", "bdod_1_mea", "ocs_mean", "s_soiltem4", "center_lat"]  # ← 请把20个变量完整填在此处
++
++X = X[[col for col in selected_features if col in X.columns]]
++
++feature_names = X.columns
++
++y = df[target_col]
++
++X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
++imputer = SimpleImputer(strategy='mean')
++X_test_imputed = imputer.fit_transform(X_test)
++
++# ===== Step 2: 读取模型 =====
++with open(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\xgb_global_model_best_class_1.pkl",
++    "rb"
++) as f:
++    rf = pickle.load(f)
++
++# ===== Step 3: 读取前 20 特征 =====
++top20_df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_XGB_class_1.csv"
++)
++top_features = top20_df["Feature"].tolist()
++X_test_top20 = pd.DataFrame(X_test_imputed, columns=X.columns)[top_features]
++
++# ===== Step 4: SHAP 分析 =====
++explainer = shap.TreeExplainer(rf, feature_perturbation="tree_path_dependent")
++# 为了加速，可以只取测试集的一部分样本
++X_shap = shap.sample(X_test_top20, 1000, random_state=42)
++
++# 计算 SHAP 值（CatBoost 不支持 approximate=True）
++shap_vals = explainer.shap_values(X_shap, check_additivity=False)
++
++# 计算 SHAP 重要性
++shap_importances = np.abs(shap_vals).mean(axis=0)
++shap_directions = shap_vals.mean(axis=0)
++shap_percent = shap_importances / shap_importances.sum() * 100  # 百分比
++
++# 保存结果
++result_df = pd.DataFrame({
++    "Feature": top_features,
++    "SHAP_MeanAbs": shap_importances,
++    "SHAP_Mean": shap_directions,
++    "Importance(%)": shap_percent,
++    "SHAP_Direction": ["+" if v > 0 else "−" for v in shap_directions]
++}).sort_values(by="SHAP_MeanAbs", ascending=False)
++
++result_df.to_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_SHAP_class_1.csv",
++    index=False
++)
++
++plt.rcParams["font.family"] = "Arial"
++plt.rcParams["font.size"] = 6
++
++# ===== Step 5: barplot 可视化 =====
++positive_color = '#e66101'  # 橙色，代表正向 SHAP
++negative_color = '#5e3c99'  # 紫蓝色，代表负向 SHAP
++colors = [positive_color if val > 0 else negative_color for val in result_df['SHAP_Mean']]
++
++plt.figure(figsize=(8.4/2.54, 5/2.54), dpi=300)
++sns.barplot(
++    y=result_df['Feature'],
++    x=result_df['Importance(%)'],
++    palette=colors,
++    dodge=False,
++    errorbar=None
++)
++plt.grid(True, which='both', linestyle='--', alpha=0.5)
++plt.xlabel('SHAP importance(%)')
++plt.ylabel('')
++plt.tight_layout()
++plt.savefig(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_SHAP_bar_class_1.tif",
++    dpi=300, bbox_inches='tight', pad_inches=0.001, format='tiff'
++)
++plt.close()
+\ No newline at end of file
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_class_1.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_class_1.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_class_1.py
+new file mode 100644
+--- /dev/null	(date 1755628945656)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_class_1.py	(date 1755628945656)
+@@ -0,0 +1,97 @@
++import pandas as pd
++import numpy as np
++from sklearn.model_selection import train_test_split
++from sklearn.impute import SimpleImputer
++from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score
++import pickle
++from xgboost import XGBRegressor
++
++# ================= Step 1: 读取数据 =================
++df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC_analysis.csv"
++)
++target_col = 'Average_Total_DOC'
++df = df.dropna(subset=[target_col])
++
++# 删除不需要的列
++drop_cols = [
++     'Annual_Increase_Rate',  'Annual_Increase_Rate_1', 'Average_Total_DOC_Area_Unit',
++     'Average_Total_DOC_1', 'Annual_Increase_Rate_DOC_Area_Unit'
++]
++df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
++# ========== Step 1.5: 筛选第一类流域（1–10 km²） ==========
++df = df[(df['area_km2'] >= 1) & (df['area_km2'] <= 10)].copy()
++# 特征
++X = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
++
++# ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========
++"""
++selected_features = ["ocd_4_mean", "center_lat", "soc_6_mean", "bdod_1_mea", "soc_5_mean", "ocd_6_mean", "cslope_mea", "soc_3_mean", "ocd_5_mean", "soc_4_mean",
++                     "ocd_3_mean", "soc_2_mean", "total_prec", "cfvo_6_mea", "t_2m_mean", "bdod_3_mea", "LS_mean", "s_epot", "terrain_12", "slope"]  # ← 请把20个变量完整填在此处
++"""
++selected_features = ["pf_disc", "pf_spor", "terrain_5", "gravelius", "terrain_14", "LS_mean", "soilt_12", "lc_20", "s_etot", "t_2m_mean",
++                     "s_NDVI_mea", "s_TCW_mean", "frac_burn", "bdod_5_mea", "bdod_6_mea", "ocd_1_mean", "bdod_1_mea", "ocs_mean", "s_soiltem4", "center_lat"]  # ← 请把20个变量完整填在此处
++
++X = X[[col for col in selected_features if col in X.columns]]
++
++feature_names = X.columns
++y = df[target_col]
++
++# ================= Step 2: 数据预处理 =================
++X_train, X_test, y_train, y_test = train_test_split(
++    X, y, test_size=0.2, random_state=42
++)
++
++imputer = SimpleImputer(strategy='mean')
++X_train_imputed = imputer.fit_transform(X_train)
++X_test_imputed = imputer.transform(X_test)
++
++# ================= Step 3: 训练 XGBoost =================
++xgb = XGBRegressor(
++    n_estimators=10000,       # 树的数量
++    learning_rate=0.03,       # 学习率
++    max_depth=6,              # 树的最大深度
++    subsample=0.8,            # 子样本比例
++    colsample_bytree=0.8,     # 每棵树随机选择的特征比例
++    random_state=42,
++    n_jobs=-1,
++    reg_alpha=0.1
++)
++xgb.fit(X_train_imputed, y_train)
++
++# 保存模型
++with open(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\xgb_global_model_best_class_1.pkl",
++    "wb"
++) as f:
++    pickle.dump(xgb, f)
++
++# ================= Step 4: 模型精度评估 =================
++y_pred = xgb.predict(X_test_imputed)
++mae = mean_absolute_error(y_test, y_pred)
++rmse = root_mean_squared_error(y_test, y_pred)
++r2 = r2_score(y_test, y_pred)
++
++print("模型性能：")
++print(f"  R²(test)   = {r2:.4f}")
++print(f"  MAE        = {mae:.4f}")
++print(f"  RMSE       = {rmse:.4f}")
++
++# ================= Step 5: 特征重要性 (XGB Importance) =================
++importances = xgb.feature_importances_
++xgb_importance_df = pd.DataFrame({
++    "Feature": feature_names,
++    "XGB_Importance": importances
++})
++
++# 取前 20 个特征
++xgb_importance_top20 = xgb_importance_df.sort_values(by="XGB_Importance", ascending=False).head(20).copy()
++
++# 添加 R²(test)
++xgb_importance_top20["R2_test"] = r2
++
++# 保存到 CSV
++output_path = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_XGB_class_1.csv"
++xgb_importance_top20.to_csv(output_path, index=False)
++
++print(f"前20个XGB重要特征及 R² 已保存到: {output_path}")
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost.py
+new file mode 100644
+--- /dev/null	(date 1755627899366)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost.py	(date 1755627899366)
+@@ -0,0 +1,96 @@
++import pandas as pd
++import numpy as np
++from sklearn.model_selection import train_test_split
++from sklearn.impute import SimpleImputer
++from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score
++import pickle
++from xgboost import XGBRegressor
++
++# ================= Step 1: 读取数据 =================
++df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC_analysis.csv"
++)
++target_col = 'Average_Total_DOC'
++df = df.dropna(subset=[target_col])
++
++# 删除不需要的列
++drop_cols = [
++     'Annual_Increase_Rate',  'Annual_Increase_Rate_1', 'Average_Total_DOC_Area_Unit',
++     'Average_Total_DOC_1', 'Annual_Increase_Rate_DOC_Area_Unit'
++]
++df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
++
++# 特征
++X = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
++
++# ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========
++"""
++selected_features = ["ocd_4_mean", "center_lat", "soc_6_mean", "bdod_1_mea", "soc_5_mean", "ocd_6_mean", "cslope_mea", "soc_3_mean", "ocd_5_mean", "soc_4_mean",
++                     "ocd_3_mean", "soc_2_mean", "total_prec", "cfvo_6_mea", "t_2m_mean", "bdod_3_mea", "LS_mean", "s_epot", "terrain_12", "slope"]  # ← 请把20个变量完整填在此处
++"""
++selected_features = ["pf_disc", "pf_spor", "terrain_5", "gravelius", "terrain_14", "LS_mean", "soilt_12", "lc_20", "s_etot", "t_2m_mean",
++                     "s_NDVI_mea", "s_TCW_mean", "frac_burn", "bdod_5_mea", "bdod_6_mea", "ocd_1_mean", "bdod_1_mea", "ocs_mean", "s_soiltem4", "center_lat"]  # ← 请把20个变量完整填在此处
++
++X = X[[col for col in selected_features if col in X.columns]]
++
++feature_names = X.columns
++y = df[target_col]
++
++# ================= Step 2: 数据预处理 =================
++X_train, X_test, y_train, y_test = train_test_split(
++    X, y, test_size=0.2, random_state=42
++)
++
++imputer = SimpleImputer(strategy='mean')
++X_train_imputed = imputer.fit_transform(X_train)
++X_test_imputed = imputer.transform(X_test)
++
++# ================= Step 3: 训练 XGBoost =================
++xgb = XGBRegressor(
++    n_estimators=10000,       # 树的数量
++    learning_rate=0.03,       # 学习率
++    max_depth=6,              # 树的最大深度
++    subsample=0.8,            # 子样本比例
++    colsample_bytree=0.8,     # 每棵树随机选择的特征比例
++    random_state=42,
++    n_jobs=-1,
++    reg_alpha=0.1
++)
++xgb.fit(X_train_imputed, y_train)
++
++# 保存模型
++with open(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\xgb_global_model_best.pkl",
++    "wb"
++) as f:
++    pickle.dump(xgb, f)
++
++# ================= Step 4: 模型精度评估 =================
++y_pred = xgb.predict(X_test_imputed)
++mae = mean_absolute_error(y_test, y_pred)
++rmse = root_mean_squared_error(y_test, y_pred)
++r2 = r2_score(y_test, y_pred)
++
++print("模型性能：")
++print(f"  R²(test)   = {r2:.4f}")
++print(f"  MAE        = {mae:.4f}")
++print(f"  RMSE       = {rmse:.4f}")
++
++# ================= Step 5: 特征重要性 (XGB Importance) =================
++importances = xgb.feature_importances_
++xgb_importance_df = pd.DataFrame({
++    "Feature": feature_names,
++    "XGB_Importance": importances
++})
++
++# 取前 20 个特征
++xgb_importance_top20 = xgb_importance_df.sort_values(by="XGB_Importance", ascending=False).head(20).copy()
++
++# 添加 R²(test)
++xgb_importance_top20["R2_test"] = r2
++
++# 保存到 CSV
++output_path = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_XGB.csv"
++xgb_importance_top20.to_csv(output_path, index=False)
++
++print(f"前20个XGB重要特征及 R² 已保存到: {output_path}")
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_SHAP_class_2.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_SHAP_class_2.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_SHAP_class_2.py
+new file mode 100644
+--- /dev/null	(date 1755630861422)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_SHAP_class_2.py	(date 1755630861422)
+@@ -0,0 +1,107 @@
++# ================= 程序 2 =================
++import pandas as pd
++import numpy as np
++import shap
++import matplotlib.pyplot as plt
++import seaborn as sns
++import pickle
++from sklearn.impute import SimpleImputer
++from sklearn.model_selection import train_test_split
++
++# ===== Step 1: 读取数据 & 模型 =====
++df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC_analysis.csv"
++)
++target_col = 'Average_Total_DOC'
++df = df.dropna(subset=[target_col])
++
++# 删除不需要的列
++drop_cols = [
++    'Annual_Increase_Rate', 'Annual_Increase_Rate_1', 'Average_Total_DOC_Area_Unit',
++    'Average_Total_DOC_1', 'Annual_Increase_Rate_DOC_Area_Unit'
++]
++df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
++# ========== Step 1.5: 筛选第一类流域（1–10 km²） ==========
++df = df[(df['area_km2'] >= 10) & (df['area_km2'] <= 100)].copy()
++
++X = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
++# ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========
++selected_features = ["pf_disc", "pf_spor", "terrain_5", "gravelius", "terrain_14", "LS_mean", "soilt_12", "lc_20", "s_etot", "t_2m_mean",
++                     "s_NDVI_mea", "s_TCW_mean", "frac_burn", "bdod_5_mea", "bdod_6_mea", "ocd_1_mean", "bdod_1_mea", "ocs_mean", "s_soiltem4", "center_lat"]  # ← 请把20个变量完整填在此处
++
++X = X[[col for col in selected_features if col in X.columns]]
++
++feature_names = X.columns
++
++y = df[target_col]
++
++X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
++imputer = SimpleImputer(strategy='mean')
++X_test_imputed = imputer.fit_transform(X_test)
++
++# ===== Step 2: 读取模型 =====
++with open(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\xgb_global_model_best_class_2.pkl",
++    "rb"
++) as f:
++    rf = pickle.load(f)
++
++# ===== Step 3: 读取前 20 特征 =====
++top20_df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_XGB_class_2.csv"
++)
++top_features = top20_df["Feature"].tolist()
++X_test_top20 = pd.DataFrame(X_test_imputed, columns=X.columns)[top_features]
++
++# ===== Step 4: SHAP 分析 =====
++explainer = shap.TreeExplainer(rf, feature_perturbation="tree_path_dependent")
++# 为了加速，可以只取测试集的一部分样本
++X_shap = shap.sample(X_test_top20, 1000, random_state=42)
++
++# 计算 SHAP 值（CatBoost 不支持 approximate=True）
++shap_vals = explainer.shap_values(X_shap, check_additivity=False)
++
++# 计算 SHAP 重要性
++shap_importances = np.abs(shap_vals).mean(axis=0)
++shap_directions = shap_vals.mean(axis=0)
++shap_percent = shap_importances / shap_importances.sum() * 100  # 百分比
++
++# 保存结果
++result_df = pd.DataFrame({
++    "Feature": top_features,
++    "SHAP_MeanAbs": shap_importances,
++    "SHAP_Mean": shap_directions,
++    "Importance(%)": shap_percent,
++    "SHAP_Direction": ["+" if v > 0 else "−" for v in shap_directions]
++}).sort_values(by="SHAP_MeanAbs", ascending=False)
++
++result_df.to_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_SHAP_class_2.csv",
++    index=False
++)
++
++plt.rcParams["font.family"] = "Arial"
++plt.rcParams["font.size"] = 6
++
++# ===== Step 5: barplot 可视化 =====
++positive_color = '#e66101'  # 橙色，代表正向 SHAP
++negative_color = '#5e3c99'  # 紫蓝色，代表负向 SHAP
++colors = [positive_color if val > 0 else negative_color for val in result_df['SHAP_Mean']]
++
++plt.figure(figsize=(8.4/2.54, 5/2.54), dpi=300)
++sns.barplot(
++    y=result_df['Feature'],
++    x=result_df['Importance(%)'],
++    palette=colors,
++    dodge=False,
++    errorbar=None
++)
++plt.grid(True, which='both', linestyle='--', alpha=0.5)
++plt.xlabel('SHAP importance(%)')
++plt.ylabel('')
++plt.tight_layout()
++plt.savefig(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_SHAP_bar_class_2.tif",
++    dpi=300, bbox_inches='tight', pad_inches=0.001, format='tiff'
++)
++plt.close()
+\ No newline at end of file
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_class_2.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_class_2.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_class_2.py
+new file mode 100644
+--- /dev/null	(date 1755629461097)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_class_2.py	(date 1755629461097)
+@@ -0,0 +1,97 @@
++import pandas as pd
++import numpy as np
++from sklearn.model_selection import train_test_split
++from sklearn.impute import SimpleImputer
++from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score
++import pickle
++from xgboost import XGBRegressor
++
++# ================= Step 1: 读取数据 =================
++df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC_analysis.csv"
++)
++target_col = 'Average_Total_DOC'
++df = df.dropna(subset=[target_col])
++
++# 删除不需要的列
++drop_cols = [
++     'Annual_Increase_Rate',  'Annual_Increase_Rate_1', 'Average_Total_DOC_Area_Unit',
++     'Average_Total_DOC_1', 'Annual_Increase_Rate_DOC_Area_Unit'
++]
++df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
++# ========== Step 1.5: 筛选第一类流域（1–10 km²） ==========
++df = df[(df['area_km2'] >= 10) & (df['area_km2'] <= 100)].copy()
++# 特征
++X = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
++
++# ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========
++"""
++selected_features = ["ocd_4_mean", "center_lat", "soc_6_mean", "bdod_1_mea", "soc_5_mean", "ocd_6_mean", "cslope_mea", "soc_3_mean", "ocd_5_mean", "soc_4_mean",
++                     "ocd_3_mean", "soc_2_mean", "total_prec", "cfvo_6_mea", "t_2m_mean", "bdod_3_mea", "LS_mean", "s_epot", "terrain_12", "slope"]  # ← 请把20个变量完整填在此处
++"""
++selected_features = ["pf_disc", "pf_spor", "terrain_5", "gravelius", "terrain_14", "LS_mean", "soilt_12", "lc_20", "s_etot", "t_2m_mean",
++                     "s_NDVI_mea", "s_TCW_mean", "frac_burn", "bdod_5_mea", "bdod_6_mea", "ocd_1_mean", "bdod_1_mea", "ocs_mean", "s_soiltem4", "center_lat"]  # ← 请把20个变量完整填在此处
++
++X = X[[col for col in selected_features if col in X.columns]]
++
++feature_names = X.columns
++y = df[target_col]
++
++# ================= Step 2: 数据预处理 =================
++X_train, X_test, y_train, y_test = train_test_split(
++    X, y, test_size=0.2, random_state=42
++)
++
++imputer = SimpleImputer(strategy='mean')
++X_train_imputed = imputer.fit_transform(X_train)
++X_test_imputed = imputer.transform(X_test)
++
++# ================= Step 3: 训练 XGBoost =================
++xgb = XGBRegressor(
++    n_estimators=10000,       # 树的数量
++    learning_rate=0.03,       # 学习率
++    max_depth=6,              # 树的最大深度
++    subsample=0.8,            # 子样本比例
++    colsample_bytree=0.8,     # 每棵树随机选择的特征比例
++    random_state=42,
++    n_jobs=-1,
++    reg_alpha=0.1
++)
++xgb.fit(X_train_imputed, y_train)
++
++# 保存模型
++with open(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\xgb_global_model_best_class_2.pkl",
++    "wb"
++) as f:
++    pickle.dump(xgb, f)
++
++# ================= Step 4: 模型精度评估 =================
++y_pred = xgb.predict(X_test_imputed)
++mae = mean_absolute_error(y_test, y_pred)
++rmse = root_mean_squared_error(y_test, y_pred)
++r2 = r2_score(y_test, y_pred)
++
++print("模型性能：")
++print(f"  R²(test)   = {r2:.4f}")
++print(f"  MAE        = {mae:.4f}")
++print(f"  RMSE       = {rmse:.4f}")
++
++# ================= Step 5: 特征重要性 (XGB Importance) =================
++importances = xgb.feature_importances_
++xgb_importance_df = pd.DataFrame({
++    "Feature": feature_names,
++    "XGB_Importance": importances
++})
++
++# 取前 20 个特征
++xgb_importance_top20 = xgb_importance_df.sort_values(by="XGB_Importance", ascending=False).head(20).copy()
++
++# 添加 R²(test)
++xgb_importance_top20["R2_test"] = r2
++
++# 保存到 CSV
++output_path = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_XGB_class_2.csv"
++xgb_importance_top20.to_csv(output_path, index=False)
++
++print(f"前20个XGB重要特征及 R² 已保存到: {output_path}")
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_SHAP_class_3.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_SHAP_class_3.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_SHAP_class_3.py
+new file mode 100644
+--- /dev/null	(date 1755632135216)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_SHAP_class_3.py	(date 1755632135216)
+@@ -0,0 +1,107 @@
++# ================= 程序 2 =================
++import pandas as pd
++import numpy as np
++import shap
++import matplotlib.pyplot as plt
++import seaborn as sns
++import pickle
++from sklearn.impute import SimpleImputer
++from sklearn.model_selection import train_test_split
++
++# ===== Step 1: 读取数据 & 模型 =====
++df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC_analysis.csv"
++)
++target_col = 'Average_Total_DOC'
++df = df.dropna(subset=[target_col])
++
++# 删除不需要的列
++drop_cols = [
++    'Annual_Increase_Rate', 'Annual_Increase_Rate_1', 'Average_Total_DOC_Area_Unit',
++    'Average_Total_DOC_1', 'Annual_Increase_Rate_DOC_Area_Unit'
++]
++df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
++# ========== Step 1.5: 筛选第一类流域（1–10 km²） ==========
++df = df[(df['area_km2'] >= 100) & (df['area_km2'] <= 100000000000000000000)].copy()
++
++X = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
++# ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========
++selected_features = ["pf_disc", "pf_spor", "terrain_5", "gravelius", "terrain_14", "LS_mean", "soilt_12", "lc_20", "s_etot", "t_2m_mean",
++                     "s_NDVI_mea", "s_TCW_mean", "frac_burn", "bdod_5_mea", "bdod_6_mea", "ocd_1_mean", "bdod_1_mea", "ocs_mean", "s_soiltem4", "center_lat"]  # ← 请把20个变量完整填在此处
++
++X = X[[col for col in selected_features if col in X.columns]]
++
++feature_names = X.columns
++
++y = df[target_col]
++
++X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
++imputer = SimpleImputer(strategy='mean')
++X_test_imputed = imputer.fit_transform(X_test)
++
++# ===== Step 2: 读取模型 =====
++with open(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\xgb_global_model_best.pkl",
++    "rb"
++) as f:
++    rf = pickle.load(f)
++
++# ===== Step 3: 读取前 20 特征 =====
++top20_df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_XGB.csv"
++)
++top_features = top20_df["Feature"].tolist()
++X_test_top20 = pd.DataFrame(X_test_imputed, columns=X.columns)[top_features]
++
++# ===== Step 4: SHAP 分析 =====
++explainer = shap.TreeExplainer(rf, feature_perturbation="tree_path_dependent")
++# 为了加速，可以只取测试集的一部分样本
++X_shap = shap.sample(X_test_top20, 1000, random_state=42)
++
++# 计算 SHAP 值（CatBoost 不支持 approximate=True）
++shap_vals = explainer.shap_values(X_shap, check_additivity=False)
++
++# 计算 SHAP 重要性
++shap_importances = np.abs(shap_vals).mean(axis=0)
++shap_directions = shap_vals.mean(axis=0)
++shap_percent = shap_importances / shap_importances.sum() * 100  # 百分比
++
++# 保存结果
++result_df = pd.DataFrame({
++    "Feature": top_features,
++    "SHAP_MeanAbs": shap_importances,
++    "SHAP_Mean": shap_directions,
++    "Importance(%)": shap_percent,
++    "SHAP_Direction": ["+" if v > 0 else "−" for v in shap_directions]
++}).sort_values(by="SHAP_MeanAbs", ascending=False)
++
++result_df.to_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_SHAP_class_3.csv",
++    index=False
++)
++
++plt.rcParams["font.family"] = "Arial"
++plt.rcParams["font.size"] = 6
++
++# ===== Step 5: barplot 可视化 =====
++positive_color = '#e66101'  # 橙色，代表正向 SHAP
++negative_color = '#5e3c99'  # 紫蓝色，代表负向 SHAP
++colors = [positive_color if val > 0 else negative_color for val in result_df['SHAP_Mean']]
++
++plt.figure(figsize=(8.4/2.54, 5/2.54), dpi=300)
++sns.barplot(
++    y=result_df['Feature'],
++    x=result_df['Importance(%)'],
++    palette=colors,
++    dodge=False,
++    errorbar=None
++)
++plt.grid(True, which='both', linestyle='--', alpha=0.5)
++plt.xlabel('SHAP importance(%)')
++plt.ylabel('')
++plt.tight_layout()
++plt.savefig(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_SHAP_bar_class_3.tif",
++    dpi=300, bbox_inches='tight', pad_inches=0.001, format='tiff'
++)
++plt.close()
+\ No newline at end of file
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_class_3.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_class_3.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_class_3.py
+new file mode 100644
+--- /dev/null	(date 1755629762418)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_XGBoost_class_3.py	(date 1755629762418)
+@@ -0,0 +1,97 @@
++import pandas as pd
++import numpy as np
++from sklearn.model_selection import train_test_split
++from sklearn.impute import SimpleImputer
++from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score
++import pickle
++from xgboost import XGBRegressor
++
++# ================= Step 1: 读取数据 =================
++df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC_analysis.csv"
++)
++target_col = 'Average_Total_DOC'
++df = df.dropna(subset=[target_col])
++
++# 删除不需要的列
++drop_cols = [
++     'Annual_Increase_Rate',  'Annual_Increase_Rate_1', 'Average_Total_DOC_Area_Unit',
++     'Average_Total_DOC_1', 'Annual_Increase_Rate_DOC_Area_Unit'
++]
++df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
++# ========== Step 1.5: 筛选第一类流域（1–10 km²） ==========
++df = df[(df['area_km2'] >= 100) & (df['area_km2'] <= 1000000000000000)].copy()
++# 特征
++X = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
++
++# ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========
++"""
++selected_features = ["ocd_4_mean", "center_lat", "soc_6_mean", "bdod_1_mea", "soc_5_mean", "ocd_6_mean", "cslope_mea", "soc_3_mean", "ocd_5_mean", "soc_4_mean",
++                     "ocd_3_mean", "soc_2_mean", "total_prec", "cfvo_6_mea", "t_2m_mean", "bdod_3_mea", "LS_mean", "s_epot", "terrain_12", "slope"]  # ← 请把20个变量完整填在此处
++"""
++selected_features = ["pf_disc", "pf_spor", "terrain_5", "gravelius", "terrain_14", "LS_mean", "soilt_12", "lc_20", "s_etot", "t_2m_mean",
++                     "s_NDVI_mea", "s_TCW_mean", "frac_burn", "bdod_5_mea", "bdod_6_mea", "ocd_1_mean", "bdod_1_mea", "ocs_mean", "s_soiltem4", "center_lat"]  # ← 请把20个变量完整填在此处
++
++X = X[[col for col in selected_features if col in X.columns]]
++
++feature_names = X.columns
++y = df[target_col]
++
++# ================= Step 2: 数据预处理 =================
++X_train, X_test, y_train, y_test = train_test_split(
++    X, y, test_size=0.2, random_state=42
++)
++
++imputer = SimpleImputer(strategy='mean')
++X_train_imputed = imputer.fit_transform(X_train)
++X_test_imputed = imputer.transform(X_test)
++
++# ================= Step 3: 训练 XGBoost =================
++xgb = XGBRegressor(
++    n_estimators=10000,       # 树的数量
++    learning_rate=0.03,       # 学习率
++    max_depth=6,              # 树的最大深度
++    subsample=0.8,            # 子样本比例
++    colsample_bytree=0.8,     # 每棵树随机选择的特征比例
++    random_state=42,
++    n_jobs=-1,
++    reg_alpha=0.1
++)
++xgb.fit(X_train_imputed, y_train)
++
++# 保存模型
++with open(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\xgb_global_model_best_class_3.pkl",
++    "wb"
++) as f:
++    pickle.dump(xgb, f)
++
++# ================= Step 4: 模型精度评估 =================
++y_pred = xgb.predict(X_test_imputed)
++mae = mean_absolute_error(y_test, y_pred)
++rmse = root_mean_squared_error(y_test, y_pred)
++r2 = r2_score(y_test, y_pred)
++
++print("模型性能：")
++print(f"  R²(test)   = {r2:.4f}")
++print(f"  MAE        = {mae:.4f}")
++print(f"  RMSE       = {rmse:.4f}")
++
++# ================= Step 5: 特征重要性 (XGB Importance) =================
++importances = xgb.feature_importances_
++xgb_importance_df = pd.DataFrame({
++    "Feature": feature_names,
++    "XGB_Importance": importances
++})
++
++# 取前 20 个特征
++xgb_importance_top20 = xgb_importance_df.sort_values(by="XGB_Importance", ascending=False).head(20).copy()
++
++# 添加 R²(test)
++xgb_importance_top20["R2_test"] = r2
++
++# 保存到 CSV
++output_path = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_XGB_class_3.csv"
++xgb_importance_top20.to_csv(output_path, index=False)
++
++print(f"前20个XGB重要特征及 R² 已保存到: {output_path}")
+Index: CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_class_3.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_class_3.py b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_class_3.py
+new file mode 100644
+--- /dev/null	(date 1755631600573)
++++ b/CDOM_DOC_total_river_DOC_annual_importance_factors_shap_20_CatBoost_class_3.py	(date 1755631600573)
+@@ -0,0 +1,95 @@
++import pandas as pd
++import numpy as np
++from sklearn.model_selection import train_test_split
++from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score
++import pickle
++from catboost import CatBoostRegressor
++
++# ================= Step 1: 读取数据 =================
++df = pd.read_csv(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\All_Properites_DOC_analysis.csv"
++)
++target_col = 'Average_Total_DOC'
++df = df.dropna(subset=[target_col])
++
++# 删除不需要的列
++drop_cols = [
++    'Annual_Increase_Rate', 'Annual_Increase_Rate_1', 'Average_Total_DOC_Area_Unit',
++    'Average_Total_DOC_1', 'Annual_Increase_Rate_DOC_Area_Unit'
++]
++df = df.drop(columns=[col for col in drop_cols if col in df.columns], errors='ignore')
++# ========== Step 1.5: 筛选第一类流域（1–10 km²） ==========
++df = df[(df['area_km2'] >= 100) & (df['area_km2'] <= 10000000000000)].copy()
++# 特征
++X = df.drop(columns=[target_col]).select_dtypes(include=[np.number])
++
++# ========== Step 1.6: 仅保留筛选出的重要变量进行建模 ==========
++"""
++selected_features = ["ocd_4_mean", "center_lat", "soc_6_mean", "bdod_1_mea", "soc_5_mean", "ocd_6_mean", "cslope_mea", "soc_3_mean", "ocd_5_mean", "soc_4_mean",
++                     "ocd_3_mean", "soc_2_mean", "total_prec", "cfvo_6_mea", "t_2m_mean", "bdod_3_mea", "LS_mean", "s_epot", "terrain_12", "slope"]  # ← 请把20个变量完整填在此处
++"""
++selected_features = ["pf_disc", "pf_spor", "terrain_5", "gravelius", "terrain_14", "LS_mean", "soilt_12", "lc_20", "s_etot", "t_2m_mean",
++                     "s_NDVI_mea", "s_TCW_mean", "frac_burn", "bdod_5_mea", "bdod_6_mea", "ocd_1_mean", "bdod_1_mea", "ocs_mean", "s_soiltem4", "center_lat"]  # ← 请把20个变量完整填在此处
++
++X = X[[col for col in selected_features if col in X.columns]]
++
++feature_names = X.columns
++y = df[target_col]
++
++# ================= Step 2: 数据预处理 =================
++X_train, X_test, y_train, y_test = train_test_split(
++    X, y, test_size=0.2, random_state=42
++)
++
++X_train_imputed = X_train
++X_test_imputed = X_test
++
++# ================= Step 3: 训练 CatBoost =================
++cat_model = CatBoostRegressor(
++    iterations=10000,           # 总迭代次数（树数）
++    learning_rate=0.05,         # ← 调高学习率，收敛更快
++    depth=10,                   # 树的深度，控制模型复杂度
++    l2_leaf_reg=20,             # L2 正则化系数
++    subsample=0.8,              # 每次采样 80% 的数据，防止过拟合
++    random_seed=42,             # 随机种子，保证可复现
++    verbose=500,                # 每500轮输出一次日志
++    early_stopping_rounds=300   # 如果300轮没提升，提前停止
++)
++cat_model.fit(X_train_imputed, y_train)
++
++# 保存模型
++with open(
++    r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\catboost_global_model_best_class_3.pkl",
++    "wb"
++) as f:
++    pickle.dump(cat_model, f)
++
++# ================= Step 4: 模型精度评估 =================
++y_pred = cat_model.predict(X_test_imputed)
++mae = mean_absolute_error(y_test, y_pred)
++rmse = root_mean_squared_error(y_test, y_pred)
++r2 = r2_score(y_test, y_pred)
++
++print("模型性能：")
++print(f"  R²(test)   = {r2:.4f}")
++print(f"  MAE        = {mae:.4f}")
++print(f"  RMSE       = {rmse:.4f}")
++
++# ================= Step 5: 特征重要性 (CatBoost Importance) =================
++importances = cat_model.feature_importances_
++cat_importance_df = pd.DataFrame({
++    "Feature": feature_names,
++    "CatBoost_Importance": importances
++})
++
++# 取前 20 个特征
++cat_importance_top20 = cat_importance_df.sort_values(by="CatBoost_Importance", ascending=False).head(20).copy()
++
++# 添加 R²(test)
++cat_importance_top20["R2_test"] = r2
++
++# 保存到 CSV
++output_path = r"D:\UZH\2024\20240122 Nutrient and Organic Carbon references\3_river_mouth_DOC\DOC_update_20250203\Total_DOC_average\Top20_Features_CatBoost_class_3.csv"
++cat_importance_top20.to_csv(output_path, index=False)
++
++print(f"前20个CatBoost重要特征及 R² 已保存到: {output_path}")
+\ No newline at end of file
